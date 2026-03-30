@@ -1,6 +1,8 @@
 package topology
 
-import "infinite-cube/internal/model"
+import (
+	"infinite-cube/internal/model"
+)
 
 // InfiniteCube8 returns a placeholder 8-cube/8-hinge layout.
 // Replace hinge definitions with your physically exact layout.

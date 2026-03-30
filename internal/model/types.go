@@ -14,15 +14,6 @@ const (
 	PoseB                  // e.g. 180 degrees
 )
 
-// Axis identifies a local hinge axis.
-type Axis uint8
-
-const (
-	AxisX Axis = iota
-	AxisY
-	AxisZ
-)
-
 // Hinge describes one connection in the immutable toy topology.
 type Hinge struct {
 	ID    HingeID

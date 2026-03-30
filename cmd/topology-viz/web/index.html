@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Infinite Cube Topology Viz</title>
+  <link rel="stylesheet" href="/web/style.css" />
+</head>
+<body>
+  <div class="wrap">
+    <section class="card">
+      <h1>Topology Visualizer</h1>
+      <div class="muted">Edit hinges, inspect cube bodies, and validate state bits against the Go validator.</div>
+      <div class="controls">
+        <label>Preset:
+          <select id="preset">
+            <option value="infinite8">infinite8</option>
+            <option value="simple">simple</option>
+          </select>
+        </label>
+        <button id="loadPreset">Load</button>
+        <button id="applyTable" class="secondary">Apply Table Edits</button>
+      </div>
+      <svg id="viz" viewBox="0 0 900 520"></svg>
+      <div class="muted mt-8">Blue/green/orange = X/Y/Z axis. Arrow direction on each cube marks `SignA` for that hinge.</div>
+      <div id="vizLegend" class="muted mt-6"></div>
+    </section>
+
+    <aside class="card">
+      <h1>Validator</h1>
+      <div class="muted">`StructuralValidator` + diagnostics from `AnalyzeState`.</div>
+
+      <div id="hingeToggles" class="hinge-toggles"></div>
+      <div class="controls">
+        <button id="validateBtn">Run Validator</button>
+      </div>
+      <div id="status" class="status">No run yet.</div>
+      <div id="meta" class="muted mt-8"></div>
+      <ul id="issues" class="issues"></ul>
+    </aside>
+
+    <section class="card full-span">
+      <h1>Hinges</h1>
+      <div class="muted">`AxisA` is X/Y/Z in cube A's local frame. `SignA` is positive rotation direction (+1/-1).</div>
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th><th>A</th><th>B</th><th>AxisA</th><th>SignA</th>
+          </tr>
+        </thead>
+        <tbody id="hingeBody"></tbody>
+      </table>
+    </section>
+  </div>
+
+  <script>
+    let topology = { cubes: [], hinges: [] };
+
+    function axisColor(axis) {
+      if (axis === 'X') return '#1d4ed8';
+      if (axis === 'Y') return '#047857';
+      return '#b45309';
+    }
+
+    function loadPreset() {
+      const preset = document.getElementById('preset').value;
+      fetch(`/api/topology?preset=${encodeURIComponent(preset)}`)
+        .then(r => r.json())
+        .then(data => {
+          topology = data;
+          renderTable();
+          renderToggles();
+          renderViz();
+          clearValidation();
+        });
+    }
+
+    function renderTable() {
+      const tbody = document.getElementById('hingeBody');
+      tbody.innerHTML = '';
+      topology.hinges.forEach((h, i) => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td><input type="number" min="0" max="15" value="${h.id}" data-i="${i}" data-k="id" /></td>
+          <td><input type="number" min="0" value="${h.a}" data-i="${i}" data-k="a" /></td>
+          <td><input type="number" min="0" value="${h.b}" data-i="${i}" data-k="b" /></td>
+          <td>
+            <select data-i="${i}" data-k="axisA">
+              <option ${h.axisA==='X'?'selected':''}>X</option>
+              <option ${h.axisA==='Y'?'selected':''}>Y</option>
+              <option ${h.axisA==='Z'?'selected':''}>Z</option>
+            </select>
+          </td>
+          <td>
+            <select data-i="${i}" data-k="signA">
+              <option value="1" ${h.signA===1?'selected':''}>+1</option>
+              <option value="-1" ${h.signA===-1?'selected':''}>-1</option>
+            </select>
+          </td>
+        `;
+        tbody.appendChild(row);
+      });
+    }
+
+    function applyTableEdits() {
+      document.querySelectorAll('#hingeBody [data-i]').forEach(el => {
+        const i = Number(el.dataset.i);
+        const k = el.dataset.k;
+        if (k === 'axisA') {
+          topology.hinges[i][k] = el.value;
+          return;
+        }
+        topology.hinges[i][k] = Number(el.value);
+      });
+      renderToggles();
+      renderViz();
+      clearValidation();
+    }
+
+    function renderToggles() {
+      const box = document.getElementById('hingeToggles');
+      box.innerHTML = '';
+      topology.hinges.forEach(h => {
+        const id = `pose_${h.id}`;
+        const wrap = document.createElement('label');
+        wrap.className = 'toggle';
+        wrap.innerHTML = `<input type="checkbox" id="${id}" /> H${h.id}=PoseB`;
+        box.appendChild(wrap);
+      });
+    }
+
+    function readPoseBits() {
+      let bits = 0;
+      topology.hinges.forEach(h => {
+        const cb = document.getElementById(`pose_${h.id}`);
+        if (cb && cb.checked && h.id >= 0 && h.id < 16) {
+          bits |= (1 << h.id);
+        }
+      });
+      return bits;
+    }
+
+    function runValidate() {
+      const poseBits = readPoseBits();
+      fetch('/api/validate', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ topology, poseBits }),
+      })
+      .then(r => r.json())
+      .then(showValidation);
+    }
+
+    function showValidation(res) {
+      const status = document.getElementById('status');
+      status.className = 'status ' + (res.valid ? 'ok' : 'bad');
+      status.textContent = res.valid ? 'Valid state' : 'Invalid state';
+
+      document.getElementById('meta').textContent =
+        `cubes=${res.cubeCount}, hinges=${res.hingeCount}, poseBits=${res.poseBits} (bin ${res.poseBitsBin})`;
+
+      const ul = document.getElementById('issues');
+      ul.innerHTML = '';
+      if (!res.issues || res.issues.length === 0) {
+        const li = document.createElement('li');
+        li.textContent = 'No issues.';
+        ul.appendChild(li);
+        return;
+      }
+      res.issues.forEach(issue => {
+        const li = document.createElement('li');
+        li.textContent = issue;
+        ul.appendChild(li);
+      });
+    }
+
+    function clearValidation() {
+      const status = document.getElementById('status');
+      status.className = 'status';
+      status.textContent = 'No run yet.';
+      document.getElementById('issues').innerHTML = '';
+      document.getElementById('meta').textContent = '';
+    }
+
+    function createSVG(tag) {
+      return document.createElementNS('http://www.w3.org/2000/svg', tag);
+    }
+
+    function add(a, b) {
+      return {x: a.x + b.x, y: a.y + b.y};
+    }
+
+    function scale(v, s) {
+      return {x: v.x * s, y: v.y * s};
+    }
+
+    function pathPoints(points) {
+      return points.map(p => `${p.x},${p.y}`).join(' ');
+    }
+
+    function shade(hex, amount) {
+      const n = parseInt(hex.slice(1), 16);
+      const r = Math.min(255, Math.max(0, ((n >> 16) & 255) + amount));
+      const g = Math.min(255, Math.max(0, ((n >> 8) & 255) + amount));
+      const b = Math.min(255, Math.max(0, (n & 255) + amount));
+      return `rgb(${r},${g},${b})`;
+    }
+
+    function axisVector(axis, vx, vy, vz) {
+      if (axis === 'X') return vx;
+      if (axis === 'Y') return vy;
+      return vz;
+    }
+
+    function normalizeSign(signA) {
+      return Number(signA) === -1 ? -1 : 1;
+    }
+
+    function drawEdge(svg, p1, p2, color, dashed) {
+      const edge = createSVG('line');
+      edge.setAttribute('x1', p1.x);
+      edge.setAttribute('y1', p1.y);
+      edge.setAttribute('x2', p2.x);
+      edge.setAttribute('y2', p2.y);
+      edge.setAttribute('stroke', color);
+      edge.setAttribute('stroke-width', '1.1');
+      if (dashed) edge.setAttribute('stroke-dasharray', '4 4');
+      svg.appendChild(edge);
+    }
+
+    function renderViz() {
+      const svg = document.getElementById('viz');
+      while (svg.firstChild) svg.removeChild(svg.firstChild);
+
+      const cubes = [...topology.cubes].sort((a, b) => a - b);
+      const cubeBase = '#fef3c7';
+      const xSpacing = 120;
+      const ySpacing = 70;
+      const zSpacing = 120;
+      const cubeSize = 34;
+      const vx = {x: cubeSize, y: cubeSize * 0.55};
+      const vy = {x: -cubeSize, y: cubeSize * 0.55};
+      const vz = {x: 0, y: -cubeSize * 1.05};
+
+      const cubeCenters = new Map();
+      const cubeAnchors = new Map();
+      const rawAnchors = [];
+      const cubeMeta = [];
+      cubes.forEach((cube, i) => {
+        const gx = i & 1;
+        const gy = (i >> 1) & 1;
+        const gz = (i >> 2) & 1;
+        const anchor = {
+          x: (gx - gy) * xSpacing,
+          y: (gx + gy) * ySpacing - gz * zSpacing,
+        };
+        rawAnchors.push({cube, anchor});
+        cubeMeta.push({cube, gx, gy, gz});
+      });
+
+      if (rawAnchors.length > 0) {
+        let minX = rawAnchors[0].anchor.x;
+        let maxX = rawAnchors[0].anchor.x;
+        let minY = rawAnchors[0].anchor.y;
+        let maxY = rawAnchors[0].anchor.y;
+        rawAnchors.forEach(({anchor}) => {
+          if (anchor.x < minX) minX = anchor.x;
+          if (anchor.x > maxX) maxX = anchor.x;
+          if (anchor.y < minY) minY = anchor.y;
+          if (anchor.y > maxY) maxY = anchor.y;
+        });
+        const layoutCenter = {x: (minX + maxX) / 2, y: (minY + maxY) / 2};
+        const viewCenter = {x: 450, y: 260};
+        const offset = {x: viewCenter.x - layoutCenter.x, y: viewCenter.y - layoutCenter.y};
+        rawAnchors.forEach(({cube, anchor}) => {
+          cubeAnchors.set(cube, add(anchor, offset));
+        });
+      }
+
+      topology.hinges.forEach(hg => {
+        const a = cubeAnchors.get(hg.a);
+        const b = cubeAnchors.get(hg.b);
+        if (!a || !b) return;
+        const link = createSVG('line');
+        link.setAttribute('x1', a.x);
+        link.setAttribute('y1', a.y - 12);
+        link.setAttribute('x2', b.x);
+        link.setAttribute('y2', b.y - 12);
+        link.setAttribute('stroke', axisColor(hg.axisA));
+        link.setAttribute('stroke-width', '2');
+        link.setAttribute('stroke-dasharray', '6 5');
+        link.setAttribute('opacity', '0.45');
+        svg.appendChild(link);
+      });
+
+      const drawOrder = [...cubeMeta].sort((a, b) => {
+        const pa = cubeAnchors.get(a.cube);
+        const pb = cubeAnchors.get(b.cube);
+        if (!pa || !pb) return 0;
+        if (pa.y !== pb.y) return pa.y - pb.y;
+        return pa.x - pb.x;
+      });
+
+      drawOrder.forEach(({cube}) => {
+        const p000 = cubeAnchors.get(cube);
+        if (!p000) return;
+        const p100 = add(p000, vx);
+        const p010 = add(p000, vy);
+        const p110 = add(p100, vy);
+        const p001 = add(p000, vz);
+        const p101 = add(p100, vz);
+        const p011 = add(p010, vz);
+        const p111 = add(p110, vz);
+
+        const left = createSVG('polygon');
+        left.setAttribute('points', pathPoints([p000, p010, p011, p001]));
+        left.setAttribute('fill', shade(cubeBase, -14));
+        left.setAttribute('stroke', '#78350f');
+        left.setAttribute('stroke-width', '1.4');
+        svg.appendChild(left);
+
+        const right = createSVG('polygon');
+        right.setAttribute('points', pathPoints([p000, p100, p101, p001]));
+        right.setAttribute('fill', shade(cubeBase, 6));
+        right.setAttribute('stroke', '#78350f');
+        right.setAttribute('stroke-width', '1.4');
+        svg.appendChild(right);
+
+        const topFace = createSVG('polygon');
+        topFace.setAttribute('points', pathPoints([p001, p101, p111, p011]));
+        topFace.setAttribute('fill', shade(cubeBase, 20));
+        topFace.setAttribute('stroke', '#78350f');
+        topFace.setAttribute('stroke-width', '1.4');
+        svg.appendChild(topFace);
+
+        // Full wireframe so all cube sides are represented, not only 3 visible faces.
+        drawEdge(svg, p000, p100, '#78350f', false);
+        drawEdge(svg, p100, p110, '#78350f', false);
+        drawEdge(svg, p110, p010, '#78350f', true);
+        drawEdge(svg, p010, p000, '#78350f', false);
+        drawEdge(svg, p001, p101, '#78350f', false);
+        drawEdge(svg, p101, p111, '#78350f', false);
+        drawEdge(svg, p111, p011, '#78350f', true);
+        drawEdge(svg, p011, p001, '#78350f', false);
+        drawEdge(svg, p000, p001, '#78350f', false);
+        drawEdge(svg, p100, p101, '#78350f', false);
+        drawEdge(svg, p110, p111, '#78350f', true);
+        drawEdge(svg, p010, p011, '#78350f', false);
+
+        const center = add(p000, scale(add(add(vx, vy), vz), 0.5));
+        cubeCenters.set(cube, center);
+
+        const label = createSVG('text');
+        label.setAttribute('x', center.x);
+        label.setAttribute('y', center.y + 4);
+        label.setAttribute('text-anchor', 'middle');
+        label.setAttribute('font-size', '12');
+        label.setAttribute('font-weight', '700');
+        label.setAttribute('fill', '#111827');
+        label.textContent = `Cube ${cube}`;
+        svg.appendChild(label);
+      });
+
+      topology.hinges.forEach(hg => {
+        const centerA = cubeCenters.get(hg.a);
+        const centerB = cubeCenters.get(hg.b);
+        if (!centerA || !centerB) return;
+
+        const sign = normalizeSign(hg.signA);
+        const signColor = sign === 1 ? '#166534' : '#b91c1c';
+        const axis = axisVector(hg.axisA, vx, vy, vz);
+        const n = Math.hypot(axis.x, axis.y) || 1;
+        const dir = {x: axis.x / n, y: axis.y / n};
+        const perp = {x: -dir.y, y: dir.x};
+        const sameA = topology.hinges
+          .filter(h => Number(h.a) === Number(hg.a))
+          .sort((h1, h2) => Number(h1.id) - Number(h2.id));
+        const idxOnA = sameA.findIndex(h => Number(h.id) === Number(hg.id));
+        const centerIndex = (sameA.length - 1) / 2;
+        const lane = idxOnA - centerIndex;
+        const laneOffset = 9 * lane;
+        const markerCenter = add(centerA, scale(perp, laneOffset));
+        const len = 19;
+
+        const p1 = add(markerCenter, scale(dir, -len));
+        const p2 = add(markerCenter, scale(dir, len));
+
+        const marker = createSVG('line');
+        marker.setAttribute('x1', p1.x);
+        marker.setAttribute('y1', p1.y);
+        marker.setAttribute('x2', p2.x);
+        marker.setAttribute('y2', p2.y);
+        marker.setAttribute('stroke', axisColor(hg.axisA));
+        marker.setAttribute('stroke-width', '3');
+        marker.setAttribute('stroke-linecap', 'round');
+        svg.appendChild(marker);
+
+        const arrowDir = sign === 1 ? dir : scale(dir, -1);
+        const tip = add(markerCenter, scale(arrowDir, 23));
+        const wing = {x: -arrowDir.y, y: arrowDir.x};
+        const a1 = add(tip, add(scale(arrowDir, -8), scale(wing, 5)));
+        const a2 = add(tip, add(scale(arrowDir, -8), scale(wing, -5)));
+        const arrow = createSVG('polygon');
+        arrow.setAttribute('points', pathPoints([tip, a1, a2]));
+        arrow.setAttribute('fill', signColor);
+        arrow.setAttribute('stroke', signColor);
+        arrow.setAttribute('stroke-width', '1');
+        svg.appendChild(arrow);
+
+        const mid = {x: (markerCenter.x + centerB.x) / 2, y: (markerCenter.y + centerB.y) / 2};
+        const text = createSVG('text');
+        text.setAttribute('x', mid.x + 6);
+        text.setAttribute('y', mid.y - 6);
+        text.setAttribute('font-size', '12');
+        text.setAttribute('fill', '#1f2937');
+        text.textContent = `H${hg.id}`;
+        svg.appendChild(text);
+      });
+
+      const cubeLegend = `Cubes: ${cubes.map(c => `Cube ${c}`).join(', ') || '(none)'}`;
+      const hingeLegend = `Hinges: ${topology.hinges.map(h => `H${h.id}=Cube ${h.a}\u2194Cube ${h.b}`).join(' | ') || '(none)'}`;
+      document.getElementById('vizLegend').textContent = `${cubeLegend}. ${hingeLegend}.`;
+    }
+
+    document.getElementById('loadPreset').addEventListener('click', loadPreset);
+    document.getElementById('applyTable').addEventListener('click', applyTableEdits);
+    document.getElementById('validateBtn').addEventListener('click', runValidate);
+
+    loadPreset();
+  </script>
+</body>
+</html>

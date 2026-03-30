@@ -8,6 +8,16 @@ import (
 	"infinite-cube/internal/validate"
 )
 
+func TestIntuition(t *testing.T) {
+	top := topology.Simple()
+	start := model.State{}
+	validator := validate.PermissiveValidator{}
+	g := Enumerate(top, start, validator)
+	if len(g.Nodes) == 0 {
+		t.Fatalf("expected at least one reachable node")
+	}
+}
+
 func TestEnumerateHypercubeCountWithPermissiveValidator(t *testing.T) {
 	top := topology.InfiniteCube8()
 	start := model.State{}
