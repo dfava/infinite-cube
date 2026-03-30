@@ -8,7 +8,7 @@ import (
 )
 
 func TestAnalyzeStateValid(t *testing.T) {
-	top := topology.InfiniteCube8()
+	top := topology.Simple()
 	s := model.State{}
 	report := AnalyzeState(top, s)
 	if len(report.Issues) != 0 {
