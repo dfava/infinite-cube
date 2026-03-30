@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"infinite-cube/internal/kinematics"
 	"infinite-cube/internal/model"
 	"infinite-cube/internal/topology"
 	"infinite-cube/internal/validate"
@@ -44,10 +45,39 @@ type validateResponse struct {
 	PresetUsed  string   `json:"presetUsed,omitempty"`
 }
 
+type vec3JSON struct {
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
+	Z float64 `json:"z"`
+}
+
+type quatJSON struct {
+	W float64 `json:"w"`
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
+	Z float64 `json:"z"`
+}
+
+type cubePoseJSON struct {
+	Cube int      `json:"cube"`
+	P    vec3JSON `json:"p"`
+	Q    quatJSON `json:"q"`
+}
+
+type posesResponse struct {
+	PoseBits uint16         `json:"poseBits"`
+	Poses    []cubePoseJSON `json:"poses"`
+}
+
+type apiError struct {
+	Error string `json:"error"`
+}
+
 func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/topology", handleTopology)
 	mux.HandleFunc("/api/validate", handleValidate)
+	mux.HandleFunc("/api/poses", handlePoses)
 	mux.Handle("/", http.FileServer(http.FS(webFS)))
 
 	addr := ":8080"
@@ -108,6 +138,61 @@ func handleValidate(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, resp)
 }
 
+func handlePoses(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSONWithStatus(w, http.StatusMethodNotAllowed, apiError{Error: "method not allowed"})
+		return
+	}
+
+	var req validateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONWithStatus(w, http.StatusBadRequest, apiError{Error: "invalid json"})
+		return
+	}
+
+	top, err := fromTopologyJSON(req.Topology)
+	if err != nil {
+		writeJSONWithStatus(w, http.StatusBadRequest, apiError{Error: err.Error()})
+		return
+	}
+
+	state := model.State{PoseBits: req.PoseBits}
+	if report := validate.AnalyzeState(top, state); len(report.Issues) != 0 {
+		writeJSONWithStatus(w, http.StatusBadRequest, apiError{Error: report.Issues[0]})
+		return
+	}
+
+	solver := kinematics.NewDeterministicSolver()
+	poses, err := solver.Poses(top, state)
+	if err != nil {
+		writeJSONWithStatus(w, http.StatusBadRequest, apiError{Error: err.Error()})
+		return
+	}
+
+	resp := posesResponse{
+		PoseBits: req.PoseBits,
+		Poses:    make([]cubePoseJSON, 0, len(poses)),
+	}
+	for _, c := range top.Cubes {
+		p := poses[c]
+		resp.Poses = append(resp.Poses, cubePoseJSON{
+			Cube: int(c),
+			P: vec3JSON{
+				X: p.P.X,
+				Y: p.P.Y,
+				Z: p.P.Z,
+			},
+			Q: quatJSON{
+				W: p.Q.W,
+				X: p.Q.X,
+				Y: p.Q.Y,
+				Z: p.Q.Z,
+			},
+		})
+	}
+	writeJSON(w, resp)
+}
+
 func toTopologyJSON(top model.Topology) topologyJSON {
 	cubes := make([]int, 0, len(top.Cubes))
 	for _, c := range top.Cubes {
@@ -158,7 +243,12 @@ func fromTopologyJSON(tj topologyJSON) (model.Topology, error) {
 }
 
 func writeJSON(w http.ResponseWriter, v any) {
+	writeJSONWithStatus(w, http.StatusOK, v)
+}
+
+func writeJSONWithStatus(w http.ResponseWriter, code int, v any) {
 	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
 	if err := json.NewEncoder(w).Encode(v); err != nil {
 		http.Error(w, "failed to encode json", http.StatusInternalServerError)
 	}
