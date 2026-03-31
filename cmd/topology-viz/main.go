@@ -258,8 +258,8 @@ func toTopologyJSON(top model.Topology) topologyJSON {
 			B:       int(h.B),
 			AxisA:   h.AxisA.String(),
 			SignA:   h.SignA,
-			AngleB:  h.AngleB,
-			AngleC:  h.AngleC,
+			AngleB:  h.Angle180,
+			AngleC:  h.Angle90,
 			AnchorA: vec3JSON{X: h.AnchorA.X, Y: h.AnchorA.Y, Z: h.AnchorA.Z},
 			AnchorB: vec3JSON{X: h.AnchorB.X, Y: h.AnchorB.Y, Z: h.AnchorB.Z},
 		})
@@ -288,13 +288,13 @@ func fromTopologyJSON(tj topologyJSON) (model.Topology, error) {
 			return model.Topology{}, fmt.Errorf("hinge %d: %w", h.ID, err)
 		}
 		hinges = append(hinges, model.Hinge{
-			ID:     model.HingeID(h.ID),
-			A:      model.CubeID(h.A),
-			B:      model.CubeID(h.B),
-			AxisA:  axis,
-			SignA:  h.SignA,
-			AngleB: h.AngleB,
-			AngleC: h.AngleC,
+			ID:       model.HingeID(h.ID),
+			A:        model.CubeID(h.A),
+			B:        model.CubeID(h.B),
+			AxisA:    axis,
+			SignA:    h.SignA,
+			Angle180: h.AngleB,
+			Angle90:  h.AngleC,
 			AnchorA: model.Vec3{
 				X: h.AnchorA.X,
 				Y: h.AnchorA.Y,

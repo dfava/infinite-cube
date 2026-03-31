@@ -20,9 +20,9 @@ func Enumerate(top model.Topology, start model.State, v validate.Validator) *Gra
 		queue = queue[1:]
 
 		for _, h := range top.Hinges {
-			nextPose := model.PoseA
-			if cur.Pose(h.ID) == model.PoseA {
-				nextPose = model.PoseB
+			nextPose := model.Pose0
+			if cur.Pose(h.ID) == model.Pose0 {
+				nextPose = model.Pose180
 			}
 			mv := model.Move{Hinge: h.ID, To: nextPose}
 			next := cur.ApplyMove(mv)

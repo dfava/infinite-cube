@@ -84,11 +84,11 @@ func AnalyzeTopology(top model.Topology) DiagnosticReport {
 		if h.SignA != 1 && h.SignA != -1 {
 			issues = append(issues, fmt.Sprintf("hinge %d has invalid SignA value %d (expected +1 or -1)", h.ID, h.SignA))
 		}
-		if math.IsNaN(h.AngleB) || math.IsInf(h.AngleB, 0) || math.IsNaN(h.AngleC) || math.IsInf(h.AngleC, 0) {
-			issues = append(issues, fmt.Sprintf("hinge %d has non-finite AngleB or AngleC", h.ID))
+		if math.IsNaN(h.Angle180) || math.IsInf(h.Angle180, 0) || math.IsNaN(h.Angle90) || math.IsInf(h.Angle90, 0) {
+			issues = append(issues, fmt.Sprintf("hinge %d has non-finite Angle180 or Angle90", h.ID))
 		}
-		if h.AngleB < 0 || h.AngleB > math.Pi || h.AngleC < 0 || h.AngleC > math.Pi {
-			issues = append(issues, fmt.Sprintf("hinge %d has invalid AngleB/AngleC (expected 0..pi radians)", h.ID))
+		if h.Angle180 < 0 || h.Angle180 > math.Pi || h.Angle90 < 0 || h.Angle90 > math.Pi {
+			issues = append(issues, fmt.Sprintf("hinge %d has invalid Angle180/Angle90 (expected 0..pi radians)", h.ID))
 		}
 		if !vecFinite(h.AnchorA) {
 			issues = append(issues, fmt.Sprintf("hinge %d has non-finite AnchorA", h.ID))
@@ -243,7 +243,7 @@ func checkHingeAlignment(h model.Hinge) string {
 		return fmt.Sprintf("hinge %d axis %s does not match edge direction %s of cube A", h.ID, h.AxisA, edgeDir)
 	}
 
-	// Shared edge check: in PoseA (identity rotation), the anchors must refer to the same world point
+	// Shared edge check: in Pose0 (identity rotation), the anchors must refer to the same world point
 	// if we assume they are adjacent along some axis.
 	// Actually, the simpler check: the distance between AnchorA and AnchorB must be exactly 1.0
 	// (or they must be on opposite faces of the cubes that are touching).

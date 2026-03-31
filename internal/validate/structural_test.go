@@ -32,7 +32,7 @@ func TestStructuralValidatorTransition(t *testing.T) {
 	top := topology.TwoCubeHinge()
 	v := StructuralValidator{}
 	from := model.State{}
-	mv := model.Move{Hinge: 0, To: model.PoseB}
+	mv := model.Move{Hinge: 0, To: model.Pose180}
 	to := from.ApplyMove(mv)
 	if !v.ValidTransition(top, from, mv, to) {
 		t.Fatalf("expected transition to be valid")

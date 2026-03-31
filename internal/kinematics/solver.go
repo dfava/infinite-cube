@@ -137,17 +137,20 @@ func propagateBtoA(b model.Pose, h model.Hinge, s model.State) model.Pose {
 
 func hingeRelativeRotation(h model.Hinge, s model.State) model.Quat {
 	pose := s.Pose(h.ID)
-	if pose == model.PoseA {
+	var angle float64
+	switch pose {
+	case model.Pose0:
 		return model.QuatIdentity()
-	}
-	angle := h.AngleB
-	if pose == model.PoseC {
-		angle = h.AngleC
+	case model.Pose90:
+		angle = h.Angle90
 		if angle == 0 {
 			angle = math.Pi / 2
 		}
-	} else if angle == 0 {
-		angle = math.Pi
+	case model.Pose180:
+		angle = h.Angle180
+		if angle == 0 {
+			angle = math.Pi
+		}
 	}
 	sign := 1.0
 	if h.SignA < 0 {

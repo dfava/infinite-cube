@@ -281,9 +281,9 @@
         select.id = id;
         select.dataset.hingeId = h.id;
         select.innerHTML = `
-          <option value="0">0° (PoseA)</option>
-          <option value="1">180° (PoseB)</option>
-          <option value="2">90° (PoseC)</option>
+          <option value="0">0°</option>
+          <option value="1">90°</option>
+          <option value="2">180°</option>
         `;
         select.addEventListener('change', () => {
           handlePoseChange(readPoseBits());
@@ -303,8 +303,8 @@
           const currentVal = Number(select.value);
 
           if (currentVal === 0) {
-            // Smart Activate: Try PoseB(1), then PoseC(2), then stay at PoseA(0)
-            select.value = "1";
+            // Smart Activate: Try Pose180, then Pose90, then stay at Pose0
+            select.value = "2";
             let res = await fetchValidation(readPoseBits());
             if (res.valid) {
               handlePoseChange(readPoseBits());
@@ -313,7 +313,7 @@
               return;
             }
 
-            select.value = "2";
+            select.value = "1";
             res = await fetchValidation(readPoseBits());
             if (res.valid) {
               handlePoseChange(readPoseBits());
@@ -327,7 +327,7 @@
             runValidate();
             updateBtnText();
           } else {
-            // Smart De-activate: Try PoseA(0), then stay at current
+            // Smart De-activate: Try Pose0, then stay at current
             const originalVal = String(currentVal);
             select.value = "0";
             let res = await fetchValidation(readPoseBits());
@@ -338,7 +338,7 @@
               return;
             }
 
-            // If PoseA(0) is somehow blocked (should be rare), fall back to original
+            // If Pose0 is somehow blocked (should be rare), fall back to original
             select.value = originalVal;
             handlePoseChange(readPoseBits());
             runValidate();

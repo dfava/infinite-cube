@@ -7,7 +7,7 @@ import (
 	"infinite-cube/internal/topology"
 )
 
-func TestDeterministicSolverSimplePoseA(t *testing.T) {
+func TestDeterministicSolverSimplePose0(t *testing.T) {
 	top := topology.TwoCubeHinge()
 	solver := NewDeterministicSolver()
 
@@ -36,14 +36,14 @@ func TestDeterministicSolverSimplePoseA(t *testing.T) {
 		t.Fatalf("expected cube 1 at +X offset from anchors, got %+v", p1.P)
 	}
 	if p1.Q != (model.Quat{W: 1}) {
-		t.Fatalf("expected PoseA to keep identity orientation, got %+v", p1.Q)
+		t.Fatalf("expected Pose0 to keep identity orientation, got %+v", p1.Q)
 	}
 }
 
-func TestDeterministicSolverSimplePoseBFlipsOrientation(t *testing.T) {
+func TestDeterministicSolverSimplePose180FlipsOrientation(t *testing.T) {
 	top := topology.TwoCubeHinge()
 	solver := NewDeterministicSolver()
-	state := model.State{}.ApplyMove(model.Move{Hinge: 0, To: model.PoseB})
+	state := model.State{}.ApplyMove(model.Move{Hinge: 0, To: model.Pose180})
 
 	poses, err := solver.Poses(top, state)
 	if err != nil {
@@ -54,7 +54,7 @@ func TestDeterministicSolverSimplePoseBFlipsOrientation(t *testing.T) {
 	// Now TwoCubeHinge uses AxisZ.
 	// 180deg around +Z => quaternion approximately (0,0,0,1) up to sign.
 	if !p1.Q.AlmostEqual(model.Quat{Z: 1}, 1e-6) {
-		t.Fatalf("expected cube 1 orientation to rotate around Z for PoseB, got %+v", p1.Q)
+		t.Fatalf("expected cube 1 orientation to rotate around Z for Pose180, got %+v", p1.Q)
 	}
 }
 
@@ -100,25 +100,25 @@ func TestThreeCubeOpposed90HasLineLLinePattern(t *testing.T) {
 
 	// 00, 01, 10, 11 in binary-pose layout (1 bit per hinge)
 	// Now mapped to 2 bits per hinge.
-	// PoseA=0, PoseB=1.
+	// Pose0=0, Pose180=2.
 	// State 00: H0=0, H1=0 => bits 0
-	// State 01: H0=1, H1=0 => bits 1
-	// State 10: H0=0, H1=1 => bits 4 (1 << (2*1))
-	// State 11: H0=1, H1=1 => bits 5 (1 | (1 << 2))
+	// State 01: H0=2, H1=0 => bits 2
+	// State 10: H0=0, H1=2 => bits 8 (2 << (2*1))
+	// State 11: H0=2, H1=2 => bits 10 (2 | (2 << 2))
 
 	c00, err := classify(0)
 	if err != nil {
 		t.Fatalf("state 00 error: %v", err)
 	}
-	c01, err := classify(1)
+	c01, err := classify(2)
 	if err != nil {
 		t.Fatalf("state 01 error: %v", err)
 	}
-	c10, err := classify(4)
+	c10, err := classify(8)
 	if err != nil {
 		t.Fatalf("state 10 error: %v", err)
 	}
-	c11, err := classify(5)
+	c11, err := classify(10)
 	if err != nil {
 		t.Fatalf("state 11 error: %v", err)
 	}

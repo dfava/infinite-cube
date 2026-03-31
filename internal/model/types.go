@@ -10,9 +10,9 @@ type HingeID uint8
 type HingePose uint8
 
 const (
-	PoseA HingePose = iota // 0 degrees
-	PoseB                  // 180 degrees
-	PoseC                  // 90 degrees
+	Pose0   HingePose = iota // 0 degrees
+	Pose90                   // 90 degrees
+	Pose180                  // 180 degrees
 )
 
 // Hinge describes one connection in the immutable toy topology.
@@ -22,10 +22,10 @@ type Hinge struct {
 	B     CubeID
 	AxisA Axis
 	SignA int8 // +1 or -1 for orientation convention
-	// AngleB/AngleC are hinge rotations (radians) used when state pose is PoseB/PoseC.
-	// Zero defaults to pi for AngleB and pi/2 for AngleC.
-	AngleB float64
-	AngleC float64
+	// Angle90/Angle180 are hinge rotations (radians) used when state pose is Pose90/Pose180.
+	// Zero defaults to pi/2 for Angle90 and pi for Angle180.
+	Angle90  float64
+	Angle180 float64
 	// AnchorA/AnchorB are hinge attachment points in each cube's local frame.
 	AnchorA Vec3
 	AnchorB Vec3

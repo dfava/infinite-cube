@@ -2,7 +2,7 @@ package topology
 
 import "infinite-cube/internal/model"
 
-// ThreeCubeLine creates cubes 0-1-2 connected in a straight line in PoseA.
+// ThreeCubeLine creates cubes 0-1-2 connected in a straight line in Pose0.
 func ThreeCubeLine() model.Topology {
 	cubes := []model.CubeID{0, 1, 2}
 	hinges := []model.Hinge{

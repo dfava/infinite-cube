@@ -21,17 +21,17 @@ func (s State) ApplyMove(m Move) State {
 	return s
 }
 
-// Flip cycles through PoseA -> PoseB -> PoseC -> PoseA.
+// Flip cycles through Pose0 -> Pose90 -> Pose180 -> Pose0.
 func (s State) Flip(h HingeID) State {
 	cur := s.Pose(h)
 	var next HingePose
 	switch cur {
-	case PoseA:
-		next = PoseB
-	case PoseB:
-		next = PoseC
+	case Pose0:
+		next = Pose90
+	case Pose90:
+		next = Pose180
 	default:
-		next = PoseA
+		next = Pose0
 	}
 	return s.ApplyMove(Move{Hinge: h, To: next})
 }
