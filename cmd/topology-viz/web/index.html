@@ -65,7 +65,7 @@
       <div id="exploreList" style="margin-top: 8px;"></div>
       
       <h1 style="margin-top: 20px;">Transition Diagram</h1>
-      <div class="muted">Nodes are states, edges are valid moves.</div>
+      <div class="muted"><span id="graphNodeCount">0</span> nodes, <span id="graphEdgeCount">0</span> edges. Nodes are states, edges are valid moves.</div>
       <div id="transitionGraph" style="margin-top: 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; overflow: hidden; height: 300px; position: relative;">
         <canvas id="graphCanvas"></canvas>
       </div>
@@ -76,13 +76,15 @@
     {
       "imports": {
         "three": "https://unpkg.com/three@0.162.0/build/three.module.js",
-        "three/addons/": "https://unpkg.com/three@0.162.0/examples/jsm/"
+        "three/addons/": "https://unpkg.com/three@0.162.0/examples/jsm/",
+        "d3": "https://cdn.jsdelivr.net/npm/d3@7/+esm"
       }
     }
   </script>
   <script type="module">
     import * as THREE from 'three';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import * as d3 from 'd3';
 
     let topology = { cubes: [], hinges: [] };
     let renderVersion = 0;
@@ -543,7 +545,7 @@
           btn.addEventListener('click', () => {
             setPoseBits(bits);
             handlePoseChange(bits);
-            runValidate();
+            window.runValidate();
           });
           wrap.appendChild(btn);
           const span = document.createElement('span');
@@ -613,12 +615,13 @@
         animationQueue = [newBits];
       }
 
+      currentPoseBits = newBits;
+
       if (!isMoving) {
         isMoving = true;
         const next = animationQueue.shift();
         renderViz(next);
       }
-      currentPoseBits = newBits;
       
       // Update graph highlighting
       updateGraphHighlight(newBits);
@@ -721,136 +724,220 @@
 
     let graphNodes = [];
     let graphEdges = [];
+    let simulation = null;
+    let draggedNode = null; // Track currently dragged node
     const canvas = document.getElementById('graphCanvas');
     const ctx = canvas.getContext('2d');
     const graphContainer = document.getElementById('transitionGraph');
 
     function renderTransitionGraph(states, transitions) {
-      if (!states || states.length === 0) return;
+      if (!states) return;
+      document.getElementById('graphNodeCount').textContent = states.length;
+      document.getElementById('graphEdgeCount').textContent = (transitions || []).length;
       
-      // Initialize nodes with random positions
       const width = graphContainer.clientWidth;
       const height = graphContainer.clientHeight;
       canvas.width = width;
       canvas.height = height;
-      
-      graphNodes = states.map(s => ({
-        id: s,
-        x: Math.random() * (width - 40) + 20,
-        y: Math.random() * (height - 40) + 20,
-        vx: 0,
-        vy: 0
-      }));
-      
-      graphEdges = transitions.map(t => ({
-        from: t.from,
-        to: t.to
-      }));
 
-      // Simple force-directed layout
-      for (let i = 0; i < 200; i++) {
-        applyForces(width, height);
+      if (states.length === 0) {
+        graphNodes = [];
+        graphEdges = [];
+        document.getElementById('graphEdgeCount').textContent = 0;
+        if (simulation) simulation.stop();
+        drawGraph();
+        return;
       }
       
-      drawGraph();
+      // Use D3 to manage nodes and simulation
+      // Map states to nodes, preserving positions if they already exist
+      const existingNodes = new Map(graphNodes.map(n => [n.id, n]));
+      graphNodes = states.map(s => {
+        const old = existingNodes.get(s);
+        return {
+          id: s,
+          x: old ? old.x : width / 2 + (Math.random() - 0.5) * 50,
+          y: old ? old.y : height / 2 + (Math.random() - 0.5) * 50
+        };
+      });
+
+      graphEdges = (transitions || []).map(t => ({
+        source: t.from,
+        target: t.to
+      }));
+
+      if (simulation) simulation.stop();
+
+      simulation = d3.forceSimulation(graphNodes)
+        .force("link", d3.forceLink(graphEdges).id(d => d.id).distance(60))
+        .force("charge", d3.forceManyBody().strength(-300)) // Even stronger repulsion
+        .force("center", d3.forceCenter(width / 2, height / 2))
+        .force("collision", d3.forceCollide().radius(35)) // Larger collision radius
+        .force("x", d3.forceX(width / 2).strength(0.1))
+        .force("y", d3.forceY(height / 2).strength(0.1))
+        .on("tick", drawGraph);
+
+      // Initialize dragging
+      d3.select(canvas).call(d3.drag()
+        .container(canvas)
+        .subject(event => {
+          const x = event.x;
+          const y = event.y;
+          return graphNodes.find(n => {
+            const dx = n.x - x;
+            const dy = n.y - y;
+            const radius = n.id === currentPoseBits ? 12 : 9;
+            return Math.sqrt(dx * dx + dy * dy) < radius;
+          });
+        })
+        .on("start", dragstarted)
+        .on("drag", dragged)
+        .on("end", dragended)
+      );
     }
 
-    function applyForces(width, height) {
-      const k = Math.sqrt((width * height) / graphNodes.length) * 0.5;
-      
-      // Repulsion between nodes
-      for (let i = 0; i < graphNodes.length; i++) {
-        for (let j = i + 1; j < graphNodes.length; j++) {
-          const n1 = graphNodes[i];
-          const n2 = graphNodes[j];
-          const dx = n1.x - n2.x;
-          const dy = n1.y - n2.y;
-          const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-          const force = (k * k) / dist;
-          const fx = (dx / dist) * force;
-          const fy = (dy / dist) * force;
-          n1.vx += fx; n1.vy += fy;
-          n2.vx -= fx; n2.vy -= fy;
-        }
+    function dragstarted(event) {
+      if (!event.subject) return; // Ignore if no node was hit
+      console.log('Drag started on node', event.subject.id);
+      if (!event.active) simulation.alphaTarget(0.3).restart();
+      event.subject.fx = event.subject.x;
+      event.subject.fy = event.subject.y;
+      draggedNode = event.subject;
+    }
+
+    function dragged(event) {
+      if (!event.subject) return;
+      event.subject.fx = event.x;
+      event.subject.fy = event.y;
+    }
+
+    function dragended(event) {
+      if (!event.active) simulation.alphaTarget(0);
+      if (event.subject) {
+        // We keep it pinned (fx/fy stay set) as per previous solution
       }
-      
-      // Attraction along edges
-      graphEdges.forEach(e => {
-        const n1 = graphNodes.find(n => n.id === e.from);
-        const n2 = graphNodes.find(n => n.id === e.to);
-        if (!n1 || !n2) return;
-        const dx = n1.x - n2.x;
-        const dy = n1.y - n2.y;
-        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-        const force = (dist * dist) / k;
-        const fx = (dx / dist) * force;
-        const fy = (dy / dist) * force;
-        n1.vx -= fx; n1.vy -= fy;
-        n2.vx += fx; n2.vy += fy;
-      });
-      
-      // Update positions
-      graphNodes.forEach(n => {
-        const damping = 0.5;
-        n.x += n.vx * damping;
-        n.y += n.vy * damping;
-        n.vx = 0; n.vy = 0;
-        
-        // Keep in bounds
-        n.x = Math.max(10, Math.min(width - 10, n.x));
-        n.y = Math.max(10, Math.min(height - 10, n.y));
-      });
+      draggedNode = null;
     }
 
     function drawGraph() {
+      const computedStyle = getComputedStyle(document.documentElement);
+      const accentColor = computedStyle.getPropertyValue('--accent').trim() || '#0f766e';
+      const inkColor = computedStyle.getPropertyValue('--ink').trim() || '#1f2937';
+      const mutedColor = computedStyle.getPropertyValue('--muted').trim() || '#6b7280';
+      const lineColor = '#e5e7eb'; // fallback for edges
+
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       
       // Draw edges
-      ctx.strokeStyle = '#d1d5db';
-      ctx.lineWidth = 1;
       graphEdges.forEach(e => {
-        const n1 = graphNodes.find(n => n.id === e.from);
-        const n2 = graphNodes.find(n => n.id === e.to);
-        if (!n1 || !n2) return;
+        const sourceId = e.source.id !== undefined ? e.source.id : e.source;
+        const targetId = e.target.id !== undefined ? e.target.id : e.target;
+        const isAdjacent = sourceId === currentPoseBits || targetId === currentPoseBits;
+        ctx.strokeStyle = isAdjacent ? accentColor : lineColor;
+        ctx.lineWidth = isAdjacent ? 2 : 1;
         ctx.beginPath();
-        ctx.moveTo(n1.x, n1.y);
-        ctx.lineTo(n2.x, n2.y);
-        ctx.stroke();
+        const src = e.source.id !== undefined ? e.source : graphNodes.find(n => n.id === e.source);
+        const tgt = e.target.id !== undefined ? e.target : graphNodes.find(n => n.id === e.target);
+        if (src && tgt) {
+          ctx.moveTo(src.x, src.y);
+          ctx.lineTo(tgt.x, tgt.y);
+          ctx.stroke();
+        }
       });
       
       // Draw nodes
       graphNodes.forEach(n => {
+        const isActive = n.id === currentPoseBits;
         ctx.beginPath();
-        ctx.arc(n.x, n.y, 6, 0, Math.PI * 2);
-        ctx.fillStyle = n.id === currentPoseBits ? 'var(--accent)' : '#9ca3af';
+        ctx.arc(n.x, n.y, isActive ? 10 : 7, 0, Math.PI * 2);
+        ctx.fillStyle = isActive ? accentColor : '#9ca3af';
         ctx.fill();
         ctx.strokeStyle = '#fff';
         ctx.lineWidth = 2;
         ctx.stroke();
+
+        // Label if active or hovered (always active for small graphs)
+        if (graphNodes.length <= 20) {
+          ctx.fillStyle = inkColor;
+          ctx.font = isActive ? 'bold 11px Inter, system-ui, sans-serif' : '10px Inter, system-ui, sans-serif';
+          ctx.textAlign = 'center';
+          const label = "0x" + Number(n.id).toString(16).toUpperCase();
+          ctx.fillText(label, n.x, n.y + (isActive ? 22 : 20));
+        }
       });
     }
 
     function updateGraphHighlight(poseBits) {
+      if (simulation && simulation.alpha() < 0.05) {
+        simulation.alpha(0.1).restart();
+      }
       drawGraph();
     }
 
-    canvas.addEventListener('click', (e) => {
+    function distToSegment(p, v, w) {
+      const l2 = Math.pow(v.x - w.x, 2) + Math.pow(v.y - w.y, 2);
+      if (l2 === 0) return Math.sqrt(Math.pow(p.x - v.x, 2) + Math.pow(p.y - v.y, 2));
+      let t = ((p.x - v.x) * (w.x - v.x) + (p.y - v.y) * (w.y - v.y)) / l2;
+      t = Math.max(0, Math.min(1, t));
+      return Math.sqrt(Math.pow(p.x - (v.x + t * (w.x - v.x)), 2) + Math.pow(p.y - (v.y + t * (w.y - v.y)), 2));
+    }
+
+    canvas.addEventListener('mousedown', (e) => {
       const rect = canvas.getBoundingClientRect();
       const x = e.clientX - rect.left;
       const y = e.clientY - rect.top;
       
-      // Find clicked node
-      const clickedNode = graphNodes.find(n => {
-        const dx = n.x - x;
-        const dy = n.y - y;
-        return Math.sqrt(dx * dx + dy * dy) < 10;
-      });
+      // We only use click for navigation if we're not dragging significantly
+      const mousedownPos = { x, y };
       
-      if (clickedNode) {
-        setPoseBits(clickedNode.id);
-        handlePoseChange(clickedNode.id);
-        runValidate();
-      }
+      const onMouseUp = (upEvent) => {
+        canvas.removeEventListener('mouseup', onMouseUp);
+        const upX = upEvent.clientX - rect.left;
+        const upY = upEvent.clientY - rect.top;
+        const dist = Math.sqrt(Math.pow(upX - x, 2) + Math.pow(upY - y, 2));
+        
+        if (dist < 5) { // Small movement counts as a click
+          // Check for node click
+          const clickedNode = graphNodes.find(n => {
+            const dx = n.x - upX;
+            const dy = n.y - upY;
+            const radius = n.id === currentPoseBits ? 12 : 9;
+            return Math.sqrt(dx * dx + dy * dy) < radius;
+          });
+          
+          if (clickedNode) {
+            setPoseBits(clickedNode.id);
+            handlePoseChange(clickedNode.id);
+            window.runValidate();
+            return;
+          }
+
+          // Check for edge click if an edge is adjacent to currentPoseBits
+          const clickedEdge = graphEdges.find(edge => {
+            const sourceId = edge.source.id !== undefined ? edge.source.id : edge.source;
+            const targetId = edge.target.id !== undefined ? edge.target.id : edge.target;
+            if (sourceId !== currentPoseBits && targetId !== currentPoseBits) return false;
+            
+            const src = edge.source.id !== undefined ? edge.source : graphNodes.find(n => n.id === edge.source);
+            const tgt = edge.target.id !== undefined ? edge.target : graphNodes.find(n => n.id === edge.target);
+            if (!src || !tgt) return false;
+
+            const distance = distToSegment({ x: upX, y: upY }, src, tgt);
+            return distance < 6; // Threshold for edge click
+          });
+
+          if (clickedEdge) {
+            const sourceId = clickedEdge.source.id !== undefined ? clickedEdge.source.id : clickedEdge.source;
+            const targetId = clickedEdge.target.id !== undefined ? clickedEdge.target.id : clickedEdge.target;
+            const tId = sourceId === currentPoseBits ? targetId : sourceId;
+            setPoseBits(tId);
+            handlePoseChange(tId);
+            window.runValidate();
+          }
+        }
+      };
+      
+      canvas.addEventListener('mouseup', onMouseUp);
     });
 
     document.getElementById('preset').addEventListener('change', window.loadPreset);

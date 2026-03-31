@@ -40,24 +40,8 @@ func Enumerate(top model.Topology, start model.State, v validate.Validator) *Gra
 		}
 
 		// Check if we need to explore simultaneous moves.
-		// A simple heuristic: if no single-hinge moves were possible from this state,
-		// or if we're in a specific topology that we know requires it.
-		// For now, let's only try multi-hinge moves if NO single-hinge moves were found from this node.
-		// However, that might be too restrictive.
-		// Let's stick to the issue description's requirement: support them.
-		// To keep the graph clean, we'll only add multi-hinge transitions if they lead to NEW states
-		// OR if they are specifically required (but we don't have a "required" flag yet).
-
-		// Actually, the issue is that it's NOT possible to make a move one hinge at a time.
-		// So tryApply for single hinges will return false.
-		// Let's just always try pairs if single moves didn't work, OR just always try pairs but that's expensive.
-
-		// Let's refine: Always try single moves. Then try pairs only for those that didn't work as singles?
-		// No, let's just always try pairs but maybe only for InfiniteCube? No, keep it general.
-
-		// To fix the test regression, we should only try pairs if they are "necessary" or if we want full exploration.
-		// For now, let's try pairs only if they lead to a valid state that wasn't reachable via a SINGLE valid move.
-
+		// For InfiniteCube8, we know 2-hinge moves are sufficient.
+		// We avoid 3-hinge moves to keep the graph clean and tests fast.
 		for i := 0; i < len(top.Hinges); i++ {
 			for j := i + 1; j < len(top.Hinges); j++ {
 				h1, h2 := top.Hinges[i], top.Hinges[j]
@@ -69,33 +53,17 @@ func Enumerate(top model.Topology, start model.State, v validate.Validator) *Gra
 							continue
 						}
 
-						// If this transition (or its components) is already possible via single moves,
-						// we might skip it to keep the graph simple, but a simultaneous move is distinct.
-						// The issue says "it is not possible to make a move one hinge at a time".
-						// This implies that tryApply(h1) and tryApply(h2) would both be false.
-
-						mv1 := model.Move{Changes: []model.HingeChange{{Hinge: h1.ID, To: np1}}}
-						mv2 := model.Move{Changes: []model.HingeChange{{Hinge: h2.ID, To: np2}}}
-
-						v1 := v.ValidState(top, cur.ApplyMove(mv1)) && v.ValidTransition(top, cur, mv1, cur.ApplyMove(mv1))
-						v2 := v.ValidState(top, cur.ApplyMove(mv2)) && v.ValidTransition(top, cur, mv2, cur.ApplyMove(mv2))
-
-						if v1 && v2 {
-							// Both can move independently. While they COULD move together,
-							// it's not strictly necessary to explore it as a single transition
-							// unless we want to model all possible simultaneous actions.
-							continue
-						}
-
 						mv := model.Move{Changes: []model.HingeChange{
 							{Hinge: h1.ID, To: np1},
 							{Hinge: h2.ID, To: np2},
 						}}
-						if tryApply(top, cur, mv, v, g) {
-							next := cur.ApplyMove(mv)
-							if _, seen := g.Nodes[next]; !seen {
-								g.Nodes[next] = struct{}{}
-								queue = append(queue, next)
+						if cur.Pose(h1.ID) != np1 && cur.Pose(h2.ID) != np2 {
+							if tryApply(top, cur, mv, v, g) {
+								next := cur.ApplyMove(mv)
+								if _, seen := g.Nodes[next]; !seen {
+									g.Nodes[next] = struct{}{}
+									queue = append(queue, next)
+								}
 							}
 						}
 					}

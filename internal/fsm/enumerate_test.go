@@ -30,7 +30,11 @@ func TestEnumerateHypercubeCountWithPermissiveValidator(t *testing.T) {
 		t.Fatalf("expected %d nodes, got %d", wantNodes, len(g.Nodes))
 	}
 
-	wantEdges := wantNodes * len(top.Hinges)
+	// wantEdges := wantNodes * len(top.Hinges)
+	// With pairs added: each node has len(top.Hinges) single moves
+	// AND (len(top.Hinges) choose 2) pair moves.
+	n := len(top.Hinges)
+	wantEdges := wantNodes * (n + n*(n-1)/2)
 	gotEdges := 0
 	for _, out := range g.Edges {
 		gotEdges += len(out)

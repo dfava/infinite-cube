@@ -191,8 +191,15 @@ func handleEnumerate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	transitions := make([]transitionJSON, 0)
+	seenEdge := make(map[string]bool)
 	for from, edges := range graph.Edges {
 		for _, edge := range edges {
+			// Deduplicate by (from, to) pair
+			key := fmt.Sprintf("%d-%d", from.PoseBits, edge.To.PoseBits)
+			if seenEdge[key] {
+				continue
+			}
+			seenEdge[key] = true
 			transitions = append(transitions, transitionJSON{
 				From: from.PoseBits,
 				To:   edge.To.PoseBits,
