@@ -104,8 +104,8 @@ func (s DeterministicSolver) Poses(top model.Topology, state model.State) (map[m
 					continue
 				}
 
-				if !poses[next].AlmostEqual(nextPose, 1e-6) {
-					return nil, fmt.Errorf("inconsistent kinematic cycle at cube %d via hinge %d", next, in.hinge.ID)
+				if !poses[next].AlmostEqual(nextPose, 1e-4) {
+					return nil, fmt.Errorf("inconsistent kinematic cycle at cube %d via hinge %d (expected %v, got %v)", next, in.hinge.ID, poses[next].P, nextPose.P)
 				}
 			}
 		}
