@@ -28,6 +28,7 @@ type hingeJSON struct {
 	B       int      `json:"b"`
 	AxisA   string   `json:"axisA"`
 	SignA   int8     `json:"signA"`
+	AngleB  float64  `json:"angleB"`
 	AnchorA vec3JSON `json:"anchorA"`
 	AnchorB vec3JSON `json:"anchorB"`
 }
@@ -92,19 +93,15 @@ func main() {
 func handleTopology(w http.ResponseWriter, r *http.Request) {
 	preset := r.URL.Query().Get("preset")
 	if preset == "" {
-		preset = "infinite8"
+		preset = "two-cube-hinge"
 	}
 
 	var top model.Topology
 	switch preset {
-	case "simple":
-		top = topology.Simple()
-	case "three-line":
-		top = topology.ThreeCubeLine()
-	case "three-l":
-		top = topology.ThreeCubeL()
-	case "infinite8":
-		top = topology.InfiniteCube8()
+	case "two-cube-hinge":
+		top = topology.TwoCubeHinge()
+	case "three-opposed-90":
+		top = topology.ThreeCubeOpposed90()
 	default:
 		http.Error(w, "unknown preset", http.StatusBadRequest)
 		return
@@ -212,6 +209,7 @@ func toTopologyJSON(top model.Topology) topologyJSON {
 			B:       int(h.B),
 			AxisA:   h.AxisA.String(),
 			SignA:   h.SignA,
+			AngleB:  h.AngleB,
 			AnchorA: vec3JSON{X: h.AnchorA.X, Y: h.AnchorA.Y, Z: h.AnchorA.Z},
 			AnchorB: vec3JSON{X: h.AnchorB.X, Y: h.AnchorB.Y, Z: h.AnchorB.Z},
 		})
@@ -240,11 +238,12 @@ func fromTopologyJSON(tj topologyJSON) (model.Topology, error) {
 			return model.Topology{}, fmt.Errorf("hinge %d: %w", h.ID, err)
 		}
 		hinges = append(hinges, model.Hinge{
-			ID:    model.HingeID(h.ID),
-			A:     model.CubeID(h.A),
-			B:     model.CubeID(h.B),
-			AxisA: axis,
-			SignA: h.SignA,
+			ID:     model.HingeID(h.ID),
+			A:      model.CubeID(h.A),
+			B:      model.CubeID(h.B),
+			AxisA:  axis,
+			SignA:  h.SignA,
+			AngleB: h.AngleB,
 			AnchorA: model.Vec3{
 				X: h.AnchorA.X,
 				Y: h.AnchorA.Y,

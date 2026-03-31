@@ -139,10 +139,14 @@ func hingeRelativeRotation(h model.Hinge, s model.State) model.Quat {
 	if s.Pose(h.ID) == model.PoseA {
 		return model.QuatIdentity()
 	}
+	angle := h.AngleB
+	if angle == 0 {
+		angle = math.Pi
+	}
 	sign := 1.0
 	if h.SignA < 0 {
 		sign = -1
 	}
 	axis := h.AxisA.UnitVector()
-	return model.QuatFromAxisAngle(axis, sign*math.Pi)
+	return model.QuatFromAxisAngle(axis, sign*angle)
 }

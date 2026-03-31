@@ -103,3 +103,48 @@ func TestThreeCubeLineVsLShapeDiffer(t *testing.T) {
 		t.Fatalf("expected cube 2 position to differ between line and L topologies: line=%+v L=%+v", linePoses[2].P, lPoses[2].P)
 	}
 }
+
+func TestThreeCubeOpposed90HasLineLLinePattern(t *testing.T) {
+	solver := NewDeterministicSolver()
+	top := topology.ThreeCubeOpposed90()
+
+	classify := func(bits uint16) (bool, error) {
+		poses, err := solver.Poses(top, model.State{PoseBits: bits})
+		if err != nil {
+			return false, err
+		}
+		return collinear3(poses[0].P, poses[1].P, poses[2].P), nil
+	}
+
+	c00, err := classify(0b00)
+	if err != nil {
+		t.Fatalf("state 00 error: %v", err)
+	}
+	c01, err := classify(0b01)
+	if err != nil {
+		t.Fatalf("state 01 error: %v", err)
+	}
+	c10, err := classify(0b10)
+	if err != nil {
+		t.Fatalf("state 10 error: %v", err)
+	}
+	c11, err := classify(0b11)
+	if err != nil {
+		t.Fatalf("state 11 error: %v", err)
+	}
+
+	if !c00 || c01 || c10 || !c11 {
+		t.Fatalf("unexpected shape pattern; want line/L/L/line, got 00=%v 01=%v 10=%v 11=%v", c00, c01, c10, c11)
+	}
+}
+
+func collinear3(a, b, c model.Vec3) bool {
+	v1 := b.Sub(a)
+	v2 := c.Sub(b)
+	cross := model.Vec3{
+		X: v1.Y*v2.Z - v1.Z*v2.Y,
+		Y: v1.Z*v2.X - v1.X*v2.Z,
+		Z: v1.X*v2.Y - v1.Y*v2.X,
+	}
+	return cross.Distance(model.Vec3{}) <= 1e-6
+}

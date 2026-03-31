@@ -21,6 +21,9 @@ type Hinge struct {
 	B     CubeID
 	AxisA Axis
 	SignA int8 // +1 or -1 for orientation convention
+	// AngleB is the hinge rotation (radians) used when state pose is PoseB.
+	// Zero means default pi radians.
+	AngleB float64
 	// AnchorA/AnchorB are hinge attachment points in each cube's local frame.
 	AnchorA Vec3
 	AnchorB Vec3

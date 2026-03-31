@@ -83,6 +83,12 @@ func AnalyzeTopology(top model.Topology) DiagnosticReport {
 		if h.SignA != 1 && h.SignA != -1 {
 			issues = append(issues, fmt.Sprintf("hinge %d has invalid SignA value %d (expected +1 or -1)", h.ID, h.SignA))
 		}
+		if math.IsNaN(h.AngleB) || math.IsInf(h.AngleB, 0) {
+			issues = append(issues, fmt.Sprintf("hinge %d has non-finite AngleB", h.ID))
+		}
+		if h.AngleB < 0 || h.AngleB > math.Pi {
+			issues = append(issues, fmt.Sprintf("hinge %d has invalid AngleB %.3f (expected 0..pi radians)", h.ID, h.AngleB))
+		}
 		if !vecFinite(h.AnchorA) {
 			issues = append(issues, fmt.Sprintf("hinge %d has non-finite AnchorA", h.ID))
 		}
@@ -120,11 +126,18 @@ func AnalyzeState(top model.Topology, s model.State) DiagnosticReport {
 	report := AnalyzeTopology(top)
 	issues := append([]string{}, report.Issues...)
 
-	if len(top.Hinges) < 16 {
-		mask := uint16(0xFFFF) << len(top.Hinges)
-		if s.PoseBits&mask != 0 {
+	if len(top.Hinges) > 0 {
+		var validMask uint16
+		for _, h := range top.Hinges {
+			if h.ID < 16 {
+				validMask |= (1 << h.ID)
+			}
+		}
+		if s.PoseBits&^validMask != 0 {
 			issues = append(issues, "state has bits set for hinges that do not exist in topology")
 		}
+	} else if s.PoseBits != 0 {
+		issues = append(issues, "state has bits set but topology has no hinges")
 	}
 
 	return DiagnosticReport{Issues: issues}

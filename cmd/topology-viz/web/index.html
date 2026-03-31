@@ -14,17 +14,15 @@
       <div class="controls">
         <label>Preset:
           <select id="preset">
-            <option value="infinite8">infinite8</option>
-            <option value="simple">simple</option>
-            <option value="three-line">three-line</option>
-            <option value="three-l">three-l</option>
+            <option value="two-cube-hinge">two-cube-hinge</option>
+            <option value="three-opposed-90">three-opposed-90</option>
           </select>
         </label>
         <button id="loadPreset">Load</button>
         <button id="applyTable" class="secondary">Apply Table Edits</button>
       </div>
-      <svg id="viz" viewBox="0 0 900 520"></svg>
-      <div class="muted mt-8">Blue/green/orange = X/Y/Z axis. Arrow direction on each cube marks `SignA` for that hinge. Anchors define where each hinge attaches.</div>
+      <div id="vizContainer" style="width: 900px; height: 520px; background: #f3f4f6; border-radius: 8px; overflow: hidden; position: relative;"></div>
+      <div class="muted mt-8">Blue/green/orange = X/Y/Z hinge axis. Left-click to rotate, right-click to pan, scroll to zoom.</div>
       <div id="vizLegend" class="muted mt-6"></div>
       <div id="poseStatus" class="muted mt-6"></div>
     </section>
@@ -40,6 +38,17 @@
       <div id="status" class="status">No run yet.</div>
       <div id="meta" class="muted mt-8"></div>
       <ul id="issues" class="issues"></ul>
+
+      <h1 style="margin-top: 14px;">State Explorer</h1>
+      <div class="muted">For `three-opposed-90`, jump through all 4 hinge states quickly.</div>
+      <div class="controls">
+        <button id="exploreBtn" class="secondary">Explore 4 States</button>
+      </div>
+      <ul id="exploreList" class="issues"></ul>
+
+      <h1 style="margin-top: 14px;">Pose Debug</h1>
+      <div class="muted">Cube transforms from `/api/poses` for current state.</div>
+      <pre id="posePanel" style="white-space: pre-wrap; font-size: 12px; line-height: 1.35;"></pre>
     </aside>
 
     <section class="card full-span">
@@ -56,16 +65,64 @@
     </section>
   </div>
 
-  <script>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.162.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.162.0/examples/jsm/"
+      }
+    }
+  </script>
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
     let topology = { cubes: [], hinges: [] };
+    let renderVersion = 0;
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xf3f4f6);
+    const camera = new THREE.PerspectiveCamera(45, 900 / 520, 0.1, 1000);
+    camera.position.set(5, 5, 5);
+    camera.lookAt(0, 0, 0);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(900, 520);
+    document.getElementById('vizContainer').appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+
+    // Lighting
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    scene.add(ambientLight);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    dirLight.position.set(5, 10, 7);
+    scene.add(dirLight);
+
+    // Ground Grid
+    const grid = new THREE.GridHelper(10, 20, 0xcccccc, 0xeeeeee);
+    grid.position.y = -0.51; // Just below the unit cubes
+    scene.add(grid);
+
+    const cubeMeshes = new Map();
+    const hingeMarkers = new THREE.Group();
+    scene.add(hingeMarkers);
+
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+    animate();
 
     function axisColor(axis) {
-      if (axis === 'X') return '#1d4ed8';
-      if (axis === 'Y') return '#047857';
-      return '#b45309';
+      if (axis === 'X') return 0x1d4ed8;
+      if (axis === 'Y') return 0x047857;
+      return 0xb45309;
     }
 
-    function loadPreset() {
+    window.loadPreset = function() {
       const preset = document.getElementById('preset').value;
       fetch(`/api/topology?preset=${encodeURIComponent(preset)}`)
         .then(r => r.json())
@@ -107,7 +164,7 @@
       });
     }
 
-    function applyTableEdits() {
+    window.applyTableEdits = function() {
       document.querySelectorAll('#hingeBody [data-i]').forEach(el => {
         const i = Number(el.dataset.i);
         const k = el.dataset.k;
@@ -135,10 +192,10 @@
       const box = document.getElementById('hingeToggles');
       box.innerHTML = '';
       topology.hinges.forEach(h => {
-        const id = `pose_${h.id}`;
+        const id = `pose_bit_${h.id}`;
         const wrap = document.createElement('label');
         wrap.className = 'toggle';
-        wrap.innerHTML = `<input type="checkbox" id="${id}" /> H${h.id}=PoseB`;
+        wrap.innerHTML = `<input type="checkbox" id="${id}" data-hinge-id="${h.id}" /> H${h.id}=PoseB`;
         box.appendChild(wrap);
         const cb = wrap.querySelector('input');
         cb.addEventListener('change', () => {
@@ -149,16 +206,26 @@
 
     function readPoseBits() {
       let bits = 0;
-      topology.hinges.forEach(h => {
-        const cb = document.getElementById(`pose_${h.id}`);
-        if (cb && cb.checked && h.id >= 0 && h.id < 16) {
-          bits |= (1 << h.id);
+      document.querySelectorAll('#hingeToggles input[type="checkbox"]').forEach(cb => {
+        if (cb.checked) {
+          const id = Number(cb.dataset.hingeId);
+          if (id >= 0 && id < 16) {
+            bits |= (1 << id);
+          }
         }
       });
       return bits;
     }
 
-    function runValidate() {
+    function setPoseBits(bits) {
+      document.querySelectorAll('#hingeToggles input[type="checkbox"]').forEach(cb => {
+        const id = Number(cb.dataset.hingeId);
+        const on = id >= 0 && id < 16 && ((bits & (1 << id)) !== 0);
+        cb.checked = on;
+      });
+    }
+
+    window.runValidate = function() {
       const poseBits = readPoseBits();
       fetch('/api/validate', {
         method: 'POST',
@@ -200,99 +267,40 @@
       document.getElementById('meta').textContent = '';
     }
 
-    function createSVG(tag) {
-      return document.createElementNS('http://www.w3.org/2000/svg', tag);
-    }
+    window.exploreStates = function() {
+      const ul = document.getElementById('exploreList');
+      ul.innerHTML = '';
 
-    function add(a, b) {
-      return {x: a.x + b.x, y: a.y + b.y};
-    }
+      if (document.getElementById('preset').value !== 'three-opposed-90') {
+        const li = document.createElement('li');
+        li.textContent = 'Select preset `three-opposed-90` to use this guided explorer.';
+        ul.appendChild(li);
+        return;
+      }
 
-    function scale(v, s) {
-      return {x: v.x * s, y: v.y * s};
-    }
-
-    function pathPoints(points) {
-      return points.map(p => `${p.x},${p.y}`).join(' ');
-    }
-
-    function shade(hex, amount) {
-      const n = parseInt(hex.slice(1), 16);
-      const r = Math.min(255, Math.max(0, ((n >> 16) & 255) + amount));
-      const g = Math.min(255, Math.max(0, ((n >> 8) & 255) + amount));
-      const b = Math.min(255, Math.max(0, (n & 255) + amount));
-      return `rgb(${r},${g},${b})`;
-    }
-
-    function v3(x, y, z) {
-      return {x, y, z};
-    }
-
-    function v3Add(a, b) {
-      return v3(a.x + b.x, a.y + b.y, a.z + b.z);
-    }
-
-    function v3Scale(v, s) {
-      return v3(v.x * s, v.y * s, v.z * s);
-    }
-
-    function v3Cross(a, b) {
-      return v3(
-        a.y * b.z - a.z * b.y,
-        a.z * b.x - a.x * b.z,
-        a.x * b.y - a.y * b.x,
-      );
-    }
-
-    function v3Dot(a, b) {
-      return a.x * b.x + a.y * b.y + a.z * b.z;
-    }
-
-    function quatNormalize(q) {
-      const n = Math.hypot(q.w, q.x, q.y, q.z) || 1;
-      return {w: q.w / n, x: q.x / n, y: q.y / n, z: q.z / n};
-    }
-
-    function quatMul(a, b) {
-      return {
-        w: a.w * b.w - a.x * b.x - a.y * b.y - a.z * b.z,
-        x: a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y,
-        y: a.w * b.y - a.x * b.z + a.y * b.w + a.z * b.x,
-        z: a.w * b.z + a.x * b.y - a.y * b.x + a.z * b.w,
-      };
-    }
-
-    function quatConj(q) {
-      return {w: q.w, x: -q.x, y: -q.y, z: -q.z};
-    }
-
-    function quatRotate(q, vec) {
-      const nq = quatNormalize(q);
-      const p = {w: 0, x: vec.x, y: vec.y, z: vec.z};
-      const r = quatMul(quatMul(nq, p), quatConj(nq));
-      return v3(r.x, r.y, r.z);
-    }
-
-    function axisLocalVector(axis) {
-      if (axis === 'X') return v3(1, 0, 0);
-      if (axis === 'Y') return v3(0, 1, 0);
-      return v3(0, 0, 1);
-    }
-
-    function normalizeSign(signA) {
-      return Number(signA) === -1 ? -1 : 1;
-    }
-
-    function drawEdge(svg, p1, p2, color, dashed) {
-      const edge = createSVG('line');
-      edge.setAttribute('x1', p1.x);
-      edge.setAttribute('y1', p1.y);
-      edge.setAttribute('x2', p2.x);
-      edge.setAttribute('y2', p2.y);
-      edge.setAttribute('stroke', color);
-      edge.setAttribute('stroke-width', '1.1');
-      if (dashed) edge.setAttribute('stroke-dasharray', '4 4');
-      svg.appendChild(edge);
+      const states = [
+        { bits: 0b00, label: 'both disengaged -> line' },
+        { bits: 0b01, label: 'hinge H0 engaged -> L-shape' },
+        { bits: 0b10, label: 'hinge H1 engaged -> L-shape' },
+        { bits: 0b11, label: 'both engaged -> line (rotated from initial)' },
+      ];
+      states.forEach((s) => {
+        const li = document.createElement('li');
+        const btn = document.createElement('button');
+        btn.className = 'secondary';
+        btn.textContent = `${s.bits.toString(2).padStart(2, '0')}`;
+        btn.addEventListener('click', () => {
+          setPoseBits(s.bits);
+          renderViz();
+          runValidate();
+        });
+        li.appendChild(btn);
+        const span = document.createElement('span');
+        span.style.marginLeft = '8px';
+        span.textContent = s.label;
+        li.appendChild(span);
+        ul.appendChild(li);
+      });
     }
 
     async function fetchPoses() {
@@ -311,254 +319,87 @@
       return { ok: true, poseBits: data.poseBits, byCube };
     }
 
-    function projectPosePoint(p) {
-      const sx = 110;
-      const sy = 62;
-      const sz = 96;
-      return {
-        x: (p.x - p.y) * sx,
-        y: (p.x + p.y) * sy - p.z * sz,
-      };
-    }
-
     async function renderViz() {
-      const svg = document.getElementById('viz');
-      while (svg.firstChild) svg.removeChild(svg.firstChild);
+      const thisRender = ++renderVersion;
       const poseStatus = document.getElementById('poseStatus');
       poseStatus.textContent = '';
 
-      const cubes = [...topology.cubes].sort((a, b) => a - b);
-      const cubeBase = '#fef3c7';
-      const half = 0.28;
-
       const poseResult = await fetchPoses();
+      if (thisRender !== renderVersion) return;
       if (!poseResult.ok) {
         document.getElementById('vizLegend').textContent = 'No geometry: solver error.';
         poseStatus.textContent = `Solver error: ${poseResult.error}`;
+        document.getElementById('posePanel').textContent = `error: ${poseResult.error}`;
         return;
       }
 
-      const cubeCenters2D = new Map();
-      const cubeCenters3D = new Map();
-      const cubeQuats = new Map();
-      const cubePoints2D = new Map();
-      const rawPoints = [];
-      const corners = [
-        v3(-half, -half, -half), // 0
-        v3(half, -half, -half),  // 1
-        v3(-half, half, -half),  // 2
-        v3(half, half, -half),   // 3
-        v3(-half, -half, half),  // 4
-        v3(half, -half, half),   // 5
-        v3(-half, half, half),   // 6
-        v3(half, half, half),    // 7
-      ];
-      cubes.forEach((cube) => {
-        const pose = poseResult.byCube.get(cube);
-        if (!pose) return;
-        const c = v3(pose.p.x, pose.p.y, pose.p.z);
-        const q = quatNormalize({w: pose.q.w, x: pose.q.x, y: pose.q.y, z: pose.q.z});
-        cubeCenters3D.set(cube, c);
-        cubeQuats.set(cube, q);
-        const pts2 = corners.map(local => {
-          const world = v3Add(c, quatRotate(q, local));
-          const p2 = projectPosePoint(world);
-          rawPoints.push(p2);
-          return p2;
-        });
-        cubePoints2D.set(cube, pts2);
-        const center2 = projectPosePoint(c);
-        cubeCenters2D.set(cube, center2);
-        rawPoints.push(center2);
-      });
+      const cubes = [...topology.cubes].sort((a, b) => a - b);
+      document.getElementById('posePanel').textContent = cubes
+        .filter(c => poseResult.byCube.has(c))
+        .map((cube) => {
+          const p = poseResult.byCube.get(cube).p;
+          const q = poseResult.byCube.get(cube).q;
+          return `Cube ${cube}\n  P=(${p.x.toFixed(3)}, ${p.y.toFixed(3)}, ${p.z.toFixed(3)})\n  Q=(${q.w.toFixed(3)}, ${q.x.toFixed(3)}, ${q.y.toFixed(3)}, ${q.z.toFixed(3)})`;
+        })
+        .join('\n');
 
-      let offset = {x: 0, y: 0};
-      if (rawPoints.length > 0) {
-        let minX = rawPoints[0].x;
-        let maxX = rawPoints[0].x;
-        let minY = rawPoints[0].y;
-        let maxY = rawPoints[0].y;
-        rawPoints.forEach((p) => {
-          if (p.x < minX) minX = p.x;
-          if (p.x > maxX) maxX = p.x;
-          if (p.y < minY) minY = p.y;
-          if (p.y > maxY) maxY = p.y;
-        });
-        const layoutCenter = {x: (minX + maxX) / 2, y: (minY + maxY) / 2};
-        const viewCenter = {x: 450, y: 260};
-        offset = {x: viewCenter.x - layoutCenter.x, y: viewCenter.y - layoutCenter.y};
+      // Update Cubes
+      const currentCubeIds = new Set(cubes);
+      for (const [id, mesh] of cubeMeshes.entries()) {
+        if (!currentCubeIds.has(id)) {
+          scene.remove(mesh);
+          cubeMeshes.delete(id);
+        }
       }
 
+      cubes.forEach(id => {
+        const pose = poseResult.byCube.get(id);
+        if (!pose) return;
+
+        let mesh = cubeMeshes.get(id);
+        if (!mesh) {
+          const geometry = new THREE.BoxGeometry(0.56, 0.56, 0.56);
+          const material = new THREE.MeshPhongMaterial({ color: 0xfef3c7 });
+          mesh = new THREE.Mesh(geometry, material);
+          scene.add(mesh);
+          cubeMeshes.set(id, mesh);
+        }
+        mesh.position.set(pose.p.x, pose.p.y, pose.p.z);
+        mesh.quaternion.set(pose.q.x, pose.q.y, pose.q.z, pose.q.w);
+      });
+
+      // Update Hinges
+      hingeMarkers.clear();
       topology.hinges.forEach(hg => {
-        const centerA3 = cubeCenters3D.get(hg.a);
-        const centerB3 = cubeCenters3D.get(hg.b);
-        const qA = cubeQuats.get(hg.a);
-        const qB = cubeQuats.get(hg.b);
-        if (!centerA3 || !centerB3 || !qA || !qB) return;
+        const poseA = poseResult.byCube.get(hg.a);
+        const poseB = poseResult.byCube.get(hg.b);
+        if (!poseA || !poseB) return;
+
+        const qA = new THREE.Quaternion(poseA.q.x, poseA.q.y, poseA.q.z, poseA.q.w);
+        const qB = new THREE.Quaternion(poseB.q.x, poseB.q.y, poseB.q.z, poseB.q.w);
 
         const aLocal = hg.anchorA || {x: 0, y: 0, z: 0};
-        const bLocal = hg.anchorB || {x: 0, y: 0, z: 0};
-        const worldA = v3Add(centerA3, quatRotate(qA, v3(aLocal.x, aLocal.y, aLocal.z)));
-        const worldB = v3Add(centerB3, quatRotate(qB, v3(bLocal.x, bLocal.y, bLocal.z)));
-        const a2 = add(projectPosePoint(worldA), offset);
-        const b2 = add(projectPosePoint(worldB), offset);
+        const worldA = new THREE.Vector3(aLocal.x, aLocal.y, aLocal.z).applyQuaternion(qA).add(new THREE.Vector3(poseA.p.x, poseA.p.y, poseA.p.z));
 
-        const link = createSVG('line');
-        link.setAttribute('x1', a2.x);
-        link.setAttribute('y1', a2.y);
-        link.setAttribute('x2', b2.x);
-        link.setAttribute('y2', b2.y);
-        link.setAttribute('stroke', axisColor(hg.axisA));
-        link.setAttribute('stroke-width', '2.5');
-        link.setAttribute('opacity', '0.85');
-        svg.appendChild(link);
+        // Hinge line
+        let axisLocal;
+        if (hg.axisA === 'X') axisLocal = new THREE.Vector3(1, 0, 0);
+        else if (hg.axisA === 'Y') axisLocal = new THREE.Vector3(0, 1, 0);
+        else axisLocal = new THREE.Vector3(0, 0, 1);
 
-        const dotA = createSVG('circle');
-        dotA.setAttribute('cx', a2.x);
-        dotA.setAttribute('cy', a2.y);
-        dotA.setAttribute('r', '3.5');
-        dotA.setAttribute('fill', '#111827');
-        svg.appendChild(dotA);
+        const axisWorld = axisLocal.clone().applyQuaternion(qA);
+        const p1 = worldA.clone().add(axisWorld.clone().multiplyScalar(-0.4));
+        const p2 = worldA.clone().add(axisWorld.clone().multiplyScalar(0.4));
 
-        const dotB = createSVG('circle');
-        dotB.setAttribute('cx', b2.x);
-        dotB.setAttribute('cy', b2.y);
-        dotB.setAttribute('r', '3.5');
-        dotB.setAttribute('fill', '#374151');
-        svg.appendChild(dotB);
-      });
+        const lineGeom = new THREE.BufferGeometry().setFromPoints([p1, p2]);
+        const lineMat = new THREE.LineBasicMaterial({ color: axisColor(hg.axisA), linewidth: 2 });
+        const line = new THREE.Line(lineGeom, lineMat);
+        hingeMarkers.add(line);
 
-      const drawOrder = cubes.filter(c => cubeCenters2D.has(c)).sort((a, b) => {
-        const pa = cubeCenters2D.get(a);
-        const pb = cubeCenters2D.get(b);
-        if (!pa || !pb) return 0;
-        if (pa.y !== pb.y) return pa.y - pb.y;
-        return pa.x - pb.x;
-      });
-
-      drawOrder.forEach((cube) => {
-        const pts = cubePoints2D.get(cube);
-        const q = cubeQuats.get(cube);
-        const center = cubeCenters2D.get(cube);
-        if (!pts || !q || !center) return;
-        const p = (i) => add(pts[i], offset);
-
-        const faces = [
-          [0, 1, 3, 2], // -Z
-          [4, 5, 7, 6], // +Z
-          [0, 1, 5, 4], // -Y
-          [2, 3, 7, 6], // +Y
-          [0, 2, 6, 4], // -X
-          [1, 3, 7, 5], // +X
-        ];
-
-        const cameraDir = v3(0.25, 0.25, -1);
-        const faceDraw = faces.map((idxs) => {
-          const a = quatRotate(q, corners[idxs[0]]);
-          const b = quatRotate(q, corners[idxs[1]]);
-          const c = quatRotate(q, corners[idxs[2]]);
-          const ab = v3Add(b, v3Scale(a, -1));
-          const ac = v3Add(c, v3Scale(a, -1));
-          const n = v3Cross(ab, ac);
-          const lit = v3Dot(n, cameraDir);
-          const tone = Math.max(-18, Math.min(20, lit * 12));
-          return { idxs, tone, depth: (pts[idxs[0]].y + pts[idxs[1]].y + pts[idxs[2]].y + pts[idxs[3]].y) / 4 };
-        }).sort((f1, f2) => f1.depth - f2.depth);
-
-        faceDraw.forEach(({idxs, tone}) => {
-          const poly = createSVG('polygon');
-          poly.setAttribute('points', pathPoints(idxs.map(i => p(i))));
-          poly.setAttribute('fill', shade(cubeBase, tone));
-          poly.setAttribute('stroke', '#78350f');
-          poly.setAttribute('stroke-width', '1');
-          svg.appendChild(poly);
-        });
-
-        const edges = [
-          [0, 1], [1, 3], [3, 2], [2, 0],
-          [4, 5], [5, 7], [7, 6], [6, 4],
-          [0, 4], [1, 5], [2, 6], [3, 7],
-        ];
-        edges.forEach(([a, b]) => drawEdge(svg, p(a), p(b), '#78350f', false));
-
-        const label = createSVG('text');
-        label.setAttribute('x', center.x + offset.x);
-        label.setAttribute('y', center.y + offset.y + 4);
-        label.setAttribute('text-anchor', 'middle');
-        label.setAttribute('font-size', '12');
-        label.setAttribute('font-weight', '700');
-        label.setAttribute('fill', '#111827');
-        label.textContent = `Cube ${cube}`;
-        svg.appendChild(label);
-      });
-
-      topology.hinges.forEach(hg => {
-        const centerA2 = cubeCenters2D.get(hg.a);
-        const centerB2 = cubeCenters2D.get(hg.b);
-        const centerA3 = cubeCenters3D.get(hg.a);
-        const centerB3 = cubeCenters3D.get(hg.b);
-        const qA = cubeQuats.get(hg.a);
-        const qB = cubeQuats.get(hg.b);
-        if (!centerA2 || !centerB2 || !centerA3 || !centerB3 || !qA || !qB) return;
-
-        const sign = normalizeSign(hg.signA);
-        const signColor = sign === 1 ? '#166534' : '#b91c1c';
-        const axisWorld = quatRotate(qA, axisLocalVector(hg.axisA));
-        const axisP1 = projectPosePoint(v3Add(centerA3, v3Scale(axisWorld, -0.35)));
-        const axisP2 = projectPosePoint(v3Add(centerA3, v3Scale(axisWorld, 0.35)));
-        const axis = {x: axisP2.x - axisP1.x, y: axisP2.y - axisP1.y};
-        const n = Math.hypot(axis.x, axis.y) || 1;
-        const dir = {x: axis.x / n, y: axis.y / n};
-        const perp = {x: -dir.y, y: dir.x};
-        const sameA = topology.hinges
-          .filter(h => Number(h.a) === Number(hg.a))
-          .sort((h1, h2) => Number(h1.id) - Number(h2.id));
-        const idxOnA = sameA.findIndex(h => Number(h.id) === Number(hg.id));
-        const centerIndex = (sameA.length - 1) / 2;
-        const lane = idxOnA - centerIndex;
-        const laneOffset = 9 * lane;
-        const aLocal = hg.anchorA || {x: 0, y: 0, z: 0};
-        const bLocal = hg.anchorB || {x: 0, y: 0, z: 0};
-        const worldA = v3Add(centerA3, quatRotate(qA, v3(aLocal.x, aLocal.y, aLocal.z)));
-        const worldB = v3Add(centerB3, quatRotate(qB, v3(bLocal.x, bLocal.y, bLocal.z)));
-        const anchorA2 = add(projectPosePoint(worldA), offset);
-        const anchorB2 = add(projectPosePoint(worldB), offset);
-        const markerCenter = add(anchorA2, scale(perp, laneOffset));
-        const len = 19;
-
-        const p1 = add(markerCenter, scale(dir, -len));
-        const p2 = add(markerCenter, scale(dir, len));
-
-        const marker = createSVG('line');
-        marker.setAttribute('x1', p1.x);
-        marker.setAttribute('y1', p1.y);
-        marker.setAttribute('x2', p2.x);
-        marker.setAttribute('y2', p2.y);
-        marker.setAttribute('stroke', axisColor(hg.axisA));
-        marker.setAttribute('stroke-width', '3');
-        marker.setAttribute('stroke-linecap', 'round');
-        svg.appendChild(marker);
-
-        const arrowDir = sign === 1 ? dir : scale(dir, -1);
-        const tip = add(markerCenter, scale(arrowDir, 23));
-        const wing = {x: -arrowDir.y, y: arrowDir.x};
-        const a1 = add(tip, add(scale(arrowDir, -8), scale(wing, 5)));
-        const a2 = add(tip, add(scale(arrowDir, -8), scale(wing, -5)));
-        const arrow = createSVG('polygon');
-        arrow.setAttribute('points', pathPoints([tip, a1, a2]));
-        arrow.setAttribute('fill', signColor);
-        arrow.setAttribute('stroke', signColor);
-        arrow.setAttribute('stroke-width', '1');
-        svg.appendChild(arrow);
-
-        const mid = {x: (markerCenter.x + anchorB2.x) / 2, y: (markerCenter.y + anchorB2.y) / 2};
-        const text = createSVG('text');
-        text.setAttribute('x', mid.x + 6);
-        text.setAttribute('y', mid.y - 6);
-        text.setAttribute('font-size', '12');
-        text.setAttribute('fill', '#1f2937');
-        text.textContent = `H${hg.id}`;
-        svg.appendChild(text);
+        // Hinge ID Label (Simplified as sphere for now, or just omit if too complex in 3D without CSS2D)
+        const dot = new THREE.Mesh(new THREE.SphereGeometry(0.05), new THREE.MeshBasicMaterial({ color: 0x000000 }));
+        dot.position.copy(worldA);
+        hingeMarkers.add(dot);
       });
 
       const cubeLegend = `Cubes: ${cubes.map(c => `Cube ${c}`).join(', ') || '(none)'}`;
@@ -567,11 +408,12 @@
       poseStatus.textContent = `Kinematics source: /api/poses (poseBits=${poseResult.poseBits})`;
     }
 
-    document.getElementById('loadPreset').addEventListener('click', loadPreset);
-    document.getElementById('applyTable').addEventListener('click', applyTableEdits);
-    document.getElementById('validateBtn').addEventListener('click', runValidate);
+    document.getElementById('loadPreset').addEventListener('click', window.loadPreset);
+    document.getElementById('applyTable').addEventListener('click', window.applyTableEdits);
+    document.getElementById('validateBtn').addEventListener('click', window.runValidate);
+    document.getElementById('exploreBtn').addEventListener('click', window.exploreStates);
 
-    loadPreset();
+    window.loadPreset();
   </script>
 </body>
 </html>
