@@ -72,6 +72,7 @@ type cubePoseJSON struct {
 type posesResponse struct {
 	PoseBits uint32         `json:"poseBits"`
 	Poses    []cubePoseJSON `json:"poses"`
+	Error    string         `json:"error,omitempty"`
 }
 
 type apiError struct {
@@ -209,9 +210,9 @@ func handlePoses(w http.ResponseWriter, r *http.Request) {
 	}
 
 	state := model.State{PoseBits: req.PoseBits}
+	var collisionErr string
 	if report := validate.AnalyzeState(top, state); len(report.Issues) != 0 {
-		writeJSONWithStatus(w, http.StatusBadRequest, apiError{Error: report.Issues[0]})
-		return
+		collisionErr = report.Issues[0]
 	}
 
 	solver := kinematics.NewDeterministicSolver()
@@ -224,6 +225,7 @@ func handlePoses(w http.ResponseWriter, r *http.Request) {
 	resp := posesResponse{
 		PoseBits: req.PoseBits,
 		Poses:    make([]cubePoseJSON, 0, len(poses)),
+		Error:    collisionErr,
 	}
 	for _, c := range top.Cubes {
 		p := poses[c]

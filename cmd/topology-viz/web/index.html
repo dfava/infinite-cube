@@ -33,9 +33,6 @@
       <div class="muted">`StructuralValidator` + diagnostics from `AnalyzeState`.</div>
 
       <div id="hingeToggles" class="hinge-toggles"></div>
-      <div class="controls">
-        <button id="validateBtn">Run Validator</button>
-      </div>
       <div id="status" class="status">No run yet.</div>
       <div id="meta" class="muted mt-8"></div>
       <ul id="issues" class="issues"></ul>
@@ -202,7 +199,7 @@
           currentPoseBits = 0;
           setPoseBits(0);
           renderViz(0);
-          clearValidation();
+          window.runValidate();
           window.exploreStates();
         });
     }
@@ -257,7 +254,7 @@
       });
       renderToggles();
       renderViz();
-      clearValidation();
+      window.runValidate();
       window.exploreStates();
     }
 
@@ -287,6 +284,7 @@
         `;
         select.addEventListener('change', () => {
           handlePoseChange(readPoseBits());
+          window.runValidate();
         });
         const smartBtn = document.createElement('button');
         smartBtn.className = 'secondary';
@@ -324,7 +322,7 @@
 
             select.value = "0";
             handlePoseChange(readPoseBits());
-            runValidate();
+            window.runValidate();
             updateBtnText();
           } else {
             // Smart De-activate: Try Pose0, then stay at current
@@ -341,7 +339,7 @@
             // If Pose0 is somehow blocked (should be rare), fall back to original
             select.value = originalVal;
             handlePoseChange(readPoseBits());
-            runValidate();
+            window.runValidate();
             updateBtnText();
           }
         });
@@ -498,7 +496,7 @@
       }
       const byCube = new Map();
       (data.poses || []).forEach(p => byCube.set(Number(p.cube), p));
-      return { ok: true, poseBits: data.poseBits, byCube };
+      return { ok: true, poseBits: data.poseBits, byCube, error: data.error };
     }
 
     function calculateIntermediate(oldBits, newBits) {
@@ -598,12 +596,17 @@
       const cubeLegend = `Cubes: ${cubes.map(c => `Cube ${c}`).join(', ') || '(none)'}`;
       const hingeLegend = `Hinges: ${topology.hinges.map(h => `H${h.id}=Cube ${h.a}\u2194Cube ${h.b}`).join(' | ') || '(none)'}`;
       document.getElementById('vizLegend').textContent = `${cubeLegend}. ${hingeLegend}.`;
-      poseStatus.textContent = `Kinematics source: /api/poses (poseBits=${poseResult.poseBits})`;
+      if (poseResult.error) {
+        poseStatus.textContent = `Collision: ${poseResult.error}`;
+        poseStatus.style.color = 'red';
+      } else {
+        poseStatus.textContent = `Kinematics source: /api/poses (poseBits=${poseResult.poseBits})`;
+        poseStatus.style.color = '';
+      }
     }
 
     document.getElementById('preset').addEventListener('change', window.loadPreset);
     document.getElementById('applyTable').addEventListener('click', window.applyTableEdits);
-    document.getElementById('validateBtn').addEventListener('click', window.runValidate);
 
     window.loadPreset();
   </script>
