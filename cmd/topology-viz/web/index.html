@@ -63,6 +63,12 @@
       <h1>State Explorer</h1>
       <div class="muted">Jump through all reachable states for the current configuration.</div>
       <div id="exploreList" style="margin-top: 8px;"></div>
+      
+      <h1 style="margin-top: 20px;">Transition Diagram</h1>
+      <div class="muted">Nodes are states, edges are valid moves.</div>
+      <div id="transitionGraph" style="margin-top: 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; overflow: hidden; height: 300px; position: relative;">
+        <canvas id="graphCanvas"></canvas>
+      </div>
     </aside>
   </div>
 
@@ -554,6 +560,8 @@
            div.textContent = `... and ${res.states.length - maxDisplay} more states.`;
            box.appendChild(div);
         }
+        
+        renderTransitionGraph(res.states, res.transitions);
       })
       .catch(err => {
         box.innerHTML = `<div class="bad">Fetch error: ${err}</div>`;
@@ -611,6 +619,9 @@
         renderViz(next);
       }
       currentPoseBits = newBits;
+      
+      // Update graph highlighting
+      updateGraphHighlight(newBits);
     }
 
     async function renderViz(poseBits) {
@@ -707,6 +718,140 @@
         poseStatus.style.color = '';
       }
     }
+
+    let graphNodes = [];
+    let graphEdges = [];
+    const canvas = document.getElementById('graphCanvas');
+    const ctx = canvas.getContext('2d');
+    const graphContainer = document.getElementById('transitionGraph');
+
+    function renderTransitionGraph(states, transitions) {
+      if (!states || states.length === 0) return;
+      
+      // Initialize nodes with random positions
+      const width = graphContainer.clientWidth;
+      const height = graphContainer.clientHeight;
+      canvas.width = width;
+      canvas.height = height;
+      
+      graphNodes = states.map(s => ({
+        id: s,
+        x: Math.random() * (width - 40) + 20,
+        y: Math.random() * (height - 40) + 20,
+        vx: 0,
+        vy: 0
+      }));
+      
+      graphEdges = transitions.map(t => ({
+        from: t.from,
+        to: t.to
+      }));
+
+      // Simple force-directed layout
+      for (let i = 0; i < 200; i++) {
+        applyForces(width, height);
+      }
+      
+      drawGraph();
+    }
+
+    function applyForces(width, height) {
+      const k = Math.sqrt((width * height) / graphNodes.length) * 0.5;
+      
+      // Repulsion between nodes
+      for (let i = 0; i < graphNodes.length; i++) {
+        for (let j = i + 1; j < graphNodes.length; j++) {
+          const n1 = graphNodes[i];
+          const n2 = graphNodes[j];
+          const dx = n1.x - n2.x;
+          const dy = n1.y - n2.y;
+          const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+          const force = (k * k) / dist;
+          const fx = (dx / dist) * force;
+          const fy = (dy / dist) * force;
+          n1.vx += fx; n1.vy += fy;
+          n2.vx -= fx; n2.vy -= fy;
+        }
+      }
+      
+      // Attraction along edges
+      graphEdges.forEach(e => {
+        const n1 = graphNodes.find(n => n.id === e.from);
+        const n2 = graphNodes.find(n => n.id === e.to);
+        if (!n1 || !n2) return;
+        const dx = n1.x - n2.x;
+        const dy = n1.y - n2.y;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+        const force = (dist * dist) / k;
+        const fx = (dx / dist) * force;
+        const fy = (dy / dist) * force;
+        n1.vx -= fx; n1.vy -= fy;
+        n2.vx += fx; n2.vy += fy;
+      });
+      
+      // Update positions
+      graphNodes.forEach(n => {
+        const damping = 0.5;
+        n.x += n.vx * damping;
+        n.y += n.vy * damping;
+        n.vx = 0; n.vy = 0;
+        
+        // Keep in bounds
+        n.x = Math.max(10, Math.min(width - 10, n.x));
+        n.y = Math.max(10, Math.min(height - 10, n.y));
+      });
+    }
+
+    function drawGraph() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      // Draw edges
+      ctx.strokeStyle = '#d1d5db';
+      ctx.lineWidth = 1;
+      graphEdges.forEach(e => {
+        const n1 = graphNodes.find(n => n.id === e.from);
+        const n2 = graphNodes.find(n => n.id === e.to);
+        if (!n1 || !n2) return;
+        ctx.beginPath();
+        ctx.moveTo(n1.x, n1.y);
+        ctx.lineTo(n2.x, n2.y);
+        ctx.stroke();
+      });
+      
+      // Draw nodes
+      graphNodes.forEach(n => {
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, 6, 0, Math.PI * 2);
+        ctx.fillStyle = n.id === currentPoseBits ? 'var(--accent)' : '#9ca3af';
+        ctx.fill();
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      });
+    }
+
+    function updateGraphHighlight(poseBits) {
+      drawGraph();
+    }
+
+    canvas.addEventListener('click', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      
+      // Find clicked node
+      const clickedNode = graphNodes.find(n => {
+        const dx = n.x - x;
+        const dy = n.y - y;
+        return Math.sqrt(dx * dx + dy * dy) < 10;
+      });
+      
+      if (clickedNode) {
+        setPoseBits(clickedNode.id);
+        handlePoseChange(clickedNode.id);
+        runValidate();
+      }
+    });
 
     document.getElementById('preset').addEventListener('change', window.loadPreset);
     document.getElementById('applyTable').addEventListener('click', window.applyTableEdits);

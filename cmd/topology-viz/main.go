@@ -152,8 +152,14 @@ func handleValidate(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, resp)
 }
 
+type transitionJSON struct {
+	From uint32 `json:"from"`
+	To   uint32 `json:"to"`
+}
+
 type enumerateResponse struct {
-	States []uint32 `json:"states"`
+	States      []uint32         `json:"states"`
+	Transitions []transitionJSON `json:"transitions"`
 }
 
 func handleEnumerate(w http.ResponseWriter, r *http.Request) {
@@ -184,12 +190,22 @@ func handleEnumerate(w http.ResponseWriter, r *http.Request) {
 		states = append(states, s.PoseBits)
 	}
 
+	transitions := make([]transitionJSON, 0)
+	for from, edges := range graph.Edges {
+		for _, edge := range edges {
+			transitions = append(transitions, transitionJSON{
+				From: from.PoseBits,
+				To:   edge.To.PoseBits,
+			})
+		}
+	}
+
 	// Sort states for deterministic output
 	sort.Slice(states, func(i, j int) bool {
 		return states[i] < states[j]
 	})
 
-	writeJSON(w, enumerateResponse{States: states})
+	writeJSON(w, enumerateResponse{States: states, Transitions: transitions})
 }
 
 func handlePoses(w http.ResponseWriter, r *http.Request) {
