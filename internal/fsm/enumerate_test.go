@@ -9,7 +9,7 @@ import (
 )
 
 func TestIntuition(t *testing.T) {
-	top := topology.Simple()
+	top := topology.TwoCubeHinge()
 	start := model.State{}
 	validator := validate.PermissiveValidator{}
 	g := Enumerate(top, start, validator)

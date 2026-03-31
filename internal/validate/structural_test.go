@@ -8,7 +8,7 @@ import (
 )
 
 func TestAnalyzeStateValid(t *testing.T) {
-	top := topology.Simple()
+	top := topology.TwoCubeHinge()
 	s := model.State{}
 	report := AnalyzeState(top, s)
 	if len(report.Issues) != 0 {
@@ -17,7 +17,7 @@ func TestAnalyzeStateValid(t *testing.T) {
 }
 
 func TestAnalyzeStateFlagsOutOfRangeBits(t *testing.T) {
-	top := topology.Simple()
+	top := topology.TwoCubeHinge()
 	s := model.State{PoseBits: 0b10}
 	report := AnalyzeState(top, s)
 	if len(report.Issues) == 0 {
@@ -26,7 +26,7 @@ func TestAnalyzeStateFlagsOutOfRangeBits(t *testing.T) {
 }
 
 func TestStructuralValidatorTransition(t *testing.T) {
-	top := topology.Simple()
+	top := topology.TwoCubeHinge()
 	v := StructuralValidator{}
 	from := model.State{}
 	mv := model.Move{Hinge: 0, To: model.PoseB}

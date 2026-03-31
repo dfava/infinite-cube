@@ -11,44 +11,44 @@ func InfiniteCube8() model.Topology {
 	hinges := []model.Hinge{
 		{
 			ID: 0, A: 0, B: 1, AxisA: model.AxisY, SignA: 1,
-			AnchorA: model.Vec3{X: 0.5, Y: 0, Z: 0.5},
-			AnchorB: model.Vec3{X: -0.5, Y: 0, Z: 0.5},
+			AnchorA: model.Vec3{X: 0.5, Y: 0.5, Z: 0.5},
+			AnchorB: model.Vec3{X: -0.5, Y: 0.5, Z: 0.5},
 		},
 		{
 			ID: 1, A: 1, B: 3, AxisA: model.AxisX, SignA: 1,
-			AnchorA: model.Vec3{X: 0, Y: 0.5, Z: 0.5},
-			AnchorB: model.Vec3{X: 0, Y: -0.5, Z: 0.5},
+			AnchorA: model.Vec3{X: 0.5, Y: 0.5, Z: 0.5},
+			AnchorB: model.Vec3{X: 0.5, Y: -0.5, Z: 0.5},
 		},
 		{
 			ID: 2, A: 3, B: 2, AxisA: model.AxisY, SignA: -1,
-			AnchorA: model.Vec3{X: -0.5, Y: 0, Z: 0.5},
-			AnchorB: model.Vec3{X: 0.5, Y: 0, Z: 0.5},
+			AnchorA: model.Vec3{X: -0.5, Y: 0.5, Z: 0.5},
+			AnchorB: model.Vec3{X: 0.5, Y: 0.5, Z: 0.5},
 		},
 		{
 			ID: 3, A: 2, B: 0, AxisA: model.AxisX, SignA: -1,
-			AnchorA: model.Vec3{X: 0, Y: -0.5, Z: 0.5},
-			AnchorB: model.Vec3{X: 0, Y: 0.5, Z: 0.5},
+			AnchorA: model.Vec3{X: 0.5, Y: -0.5, Z: 0.5},
+			AnchorB: model.Vec3{X: 0.5, Y: 0.5, Z: 0.5},
 		},
 
 		{
 			ID: 4, A: 4, B: 5, AxisA: model.AxisY, SignA: 1,
-			AnchorA: model.Vec3{X: 0.5, Y: 0, Z: -0.5},
-			AnchorB: model.Vec3{X: -0.5, Y: 0, Z: -0.5},
+			AnchorA: model.Vec3{X: 0.5, Y: 0.5, Z: -0.5},
+			AnchorB: model.Vec3{X: -0.5, Y: 0.5, Z: -0.5},
 		},
 		{
 			ID: 5, A: 5, B: 7, AxisA: model.AxisX, SignA: 1,
-			AnchorA: model.Vec3{X: 0, Y: 0.5, Z: -0.5},
-			AnchorB: model.Vec3{X: 0, Y: -0.5, Z: -0.5},
+			AnchorA: model.Vec3{X: 0.5, Y: 0.5, Z: -0.5},
+			AnchorB: model.Vec3{X: 0.5, Y: -0.5, Z: -0.5},
 		},
 		{
 			ID: 6, A: 7, B: 6, AxisA: model.AxisY, SignA: -1,
-			AnchorA: model.Vec3{X: -0.5, Y: 0, Z: -0.5},
-			AnchorB: model.Vec3{X: 0.5, Y: 0, Z: -0.5},
+			AnchorA: model.Vec3{X: -0.5, Y: 0.5, Z: -0.5},
+			AnchorB: model.Vec3{X: 0.5, Y: 0.5, Z: -0.5},
 		},
 		{
 			ID: 7, A: 6, B: 4, AxisA: model.AxisX, SignA: -1,
-			AnchorA: model.Vec3{X: 0, Y: -0.5, Z: -0.5},
-			AnchorB: model.Vec3{X: 0, Y: 0.5, Z: -0.5},
+			AnchorA: model.Vec3{X: 0.5, Y: -0.5, Z: -0.5},
+			AnchorB: model.Vec3{X: 0.5, Y: 0.5, Z: -0.5},
 		},
 	}
 	return model.Topology{Cubes: cubes, Hinges: hinges}

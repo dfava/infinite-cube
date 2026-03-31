@@ -10,7 +10,7 @@ func TwoCubeHinge() model.Topology {
 			ID:      0,
 			A:       0,
 			B:       1,
-			AxisA:   model.AxisX,
+			AxisA:   model.AxisZ,
 			SignA:   1,
 			AnchorA: model.Vec3{X: 0.5, Y: 0.5, Z: 0},
 			AnchorB: model.Vec3{X: -0.5, Y: 0.5, Z: 0},

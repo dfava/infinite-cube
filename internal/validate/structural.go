@@ -102,6 +102,11 @@ func AnalyzeTopology(top model.Topology) DiagnosticReport {
 		} else {
 			pairs[p] = h.ID
 		}
+
+		// Edge-alignment checks
+		if issue := checkHingeAlignment(h); issue != "" {
+			issues = append(issues, issue)
+		}
 	}
 
 	if len(top.Hinges) > 0 {
@@ -163,4 +168,73 @@ func vecFinite(v model.Vec3) bool {
 	return !math.IsNaN(v.X) && !math.IsInf(v.X, 0) &&
 		!math.IsNaN(v.Y) && !math.IsInf(v.Y, 0) &&
 		!math.IsNaN(v.Z) && !math.IsInf(v.Z, 0)
+}
+
+func checkHingeAlignment(h model.Hinge) string {
+	// A hinge is edge-aligned if the anchor has two coordinates at +/- 0.5.
+	// The third coordinate corresponds to the axis along which the edge runs.
+	// The hinge AxisA MUST match this edge direction.
+
+	type coord struct {
+		val float64
+		idx int
+	}
+	coords := []coord{{h.AnchorA.X, 0}, {h.AnchorA.Y, 1}, {h.AnchorA.Z, 2}}
+
+	fixed := make([]int, 0)
+	var freeIdx int
+	for _, c := range coords {
+		if math.Abs(math.Abs(c.val)-0.5) < 1e-6 {
+			fixed = append(fixed, c.idx)
+		} else {
+			freeIdx = c.idx
+		}
+	}
+
+	if len(fixed) < 2 {
+		return fmt.Sprintf("hinge %d is not aligned with an edge of cube A (at least two anchor coordinates must be +/- 0.5)", h.ID)
+	}
+
+	// For a hinge on an edge, the axis must be the one that is NOT fixed.
+	// In some cases (corners), more than 2 coordinates could be +/- 0.5.
+	// But normally, a hinge axis is one of X, Y, Z.
+	var edgeDir model.Axis
+	if len(fixed) == 3 {
+		// Corner case: any axis passing through this corner might be considered.
+		// However, for an infinite cube, it's usually one of the edges meeting at the corner.
+		// We'll allow the axis if it's any of the three.
+		// Wait, if it's a corner, we don't know which edge it is.
+		// But the user said "hinge is placed on an edge".
+		// Let's assume the hinge axis defines the edge.
+		edgeDir = h.AxisA
+	} else {
+		edgeDir = model.Axis(freeIdx)
+	}
+
+	if h.AxisA != edgeDir {
+		return fmt.Sprintf("hinge %d axis %s does not match edge direction %s of cube A", h.ID, h.AxisA, edgeDir)
+	}
+
+	// Shared edge check: in PoseA (identity rotation), the anchors must refer to the same world point
+	// if we assume they are adjacent along some axis.
+	// Actually, the simpler check: the distance between AnchorA and AnchorB must be exactly 1.0
+	// (or they must be on opposite faces of the cubes that are touching).
+	// If cubes are unit and axis-aligned, they touch if their centers are 1 unit apart.
+	// In that case, the contact point is AnchorA in A's frame and AnchorB in B's frame.
+	// For them to be the "same" point when the cubes are adjacent, they must be "mirrored"
+	// across the contact plane.
+	// E.g. if contact is at X=0.5 for A and X=-0.5 for B, then AnchorA.X=0.5, AnchorB.X=-0.5,
+	// and AnchorA.Y == AnchorB.Y, AnchorA.Z == AnchorB.Z.
+
+	dx := math.Abs(h.AnchorA.X - h.AnchorB.X)
+	dy := math.Abs(h.AnchorA.Y - h.AnchorB.Y)
+	dz := math.Abs(h.AnchorA.Z - h.AnchorB.Z)
+
+	// One of these should be 1.0, the others should be 0.0.
+	sums := dx + dy + dz
+	if math.Abs(sums-1.0) > 1e-6 || (dx > 1e-6 && dx < 0.99) || (dy > 1e-6 && dy < 0.99) || (dz > 1e-6 && dz < 0.99) {
+		return fmt.Sprintf("hinge %d anchors do not define a shared edge between adjacent cubes", h.ID)
+	}
+
+	return ""
 }

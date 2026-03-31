@@ -8,7 +8,7 @@ import (
 )
 
 func TestDeterministicSolverSimplePoseA(t *testing.T) {
-	top := topology.Simple()
+	top := topology.TwoCubeHinge()
 	solver := NewDeterministicSolver()
 
 	poses, err := solver.Poses(top, model.State{})
@@ -41,7 +41,7 @@ func TestDeterministicSolverSimplePoseA(t *testing.T) {
 }
 
 func TestDeterministicSolverSimplePoseBFlipsOrientation(t *testing.T) {
-	top := topology.Simple()
+	top := topology.TwoCubeHinge()
 	solver := NewDeterministicSolver()
 	state := model.State{}.ApplyMove(model.Move{Hinge: 0, To: model.PoseB})
 
@@ -51,9 +51,10 @@ func TestDeterministicSolverSimplePoseBFlipsOrientation(t *testing.T) {
 	}
 
 	p1 := poses[1]
-	// 180deg around +X => quaternion approximately (0,1,0,0) up to sign.
-	if !p1.Q.AlmostEqual(model.Quat{X: 1}, 1e-6) {
-		t.Fatalf("expected cube 1 orientation to rotate around X for PoseB, got %+v", p1.Q)
+	// Now TwoCubeHinge uses AxisZ.
+	// 180deg around +Z => quaternion approximately (0,0,0,1) up to sign.
+	if !p1.Q.AlmostEqual(model.Quat{Z: 1}, 1e-6) {
+		t.Fatalf("expected cube 1 orientation to rotate around Z for PoseB, got %+v", p1.Q)
 	}
 }
 
