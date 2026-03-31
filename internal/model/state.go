@@ -2,38 +2,40 @@ package model
 
 import "fmt"
 
-// State is an FSM node. Bit i stores pose of hinge i.
+// State is an FSM node. Each hinge i uses 2 bits in PoseBits.
 type State struct {
-	PoseBits uint16
+	PoseBits uint32
 }
 
 // Pose returns the current discrete pose for a hinge.
 func (s State) Pose(h HingeID) HingePose {
-	mask := uint16(1) << h
-	if s.PoseBits&mask != 0 {
-		return PoseB
-	}
-	return PoseA
+	shift := 2 * h
+	return HingePose((s.PoseBits >> shift) & 0x3)
 }
 
 // ApplyMove returns a new state with the move applied.
 func (s State) ApplyMove(m Move) State {
-	mask := uint16(1) << m.Hinge
-	if m.To == PoseB {
-		s.PoseBits |= mask
-	} else {
-		s.PoseBits &^= mask
-	}
+	shift := 2 * m.Hinge
+	mask := uint32(0x3) << shift
+	s.PoseBits = (s.PoseBits &^ mask) | (uint32(m.To) << shift)
 	return s
 }
 
-// Flip returns a new state where hinge h toggles pose.
+// Flip cycles through PoseA -> PoseB -> PoseC -> PoseA.
 func (s State) Flip(h HingeID) State {
-	mask := uint16(1) << h
-	s.PoseBits ^= mask
-	return s
+	cur := s.Pose(h)
+	var next HingePose
+	switch cur {
+	case PoseA:
+		next = PoseB
+	case PoseB:
+		next = PoseC
+	default:
+		next = PoseA
+	}
+	return s.ApplyMove(Move{Hinge: h, To: next})
 }
 
 func (s State) String() string {
-	return fmt.Sprintf("State{PoseBits: %016b}", s.PoseBits)
+	return fmt.Sprintf("State{PoseBits: %032b}", s.PoseBits)
 }

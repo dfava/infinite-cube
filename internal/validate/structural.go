@@ -5,6 +5,7 @@ import (
 	"math"
 	"sort"
 
+	"infinite-cube/internal/kinematics"
 	"infinite-cube/internal/model"
 )
 
@@ -83,11 +84,11 @@ func AnalyzeTopology(top model.Topology) DiagnosticReport {
 		if h.SignA != 1 && h.SignA != -1 {
 			issues = append(issues, fmt.Sprintf("hinge %d has invalid SignA value %d (expected +1 or -1)", h.ID, h.SignA))
 		}
-		if math.IsNaN(h.AngleB) || math.IsInf(h.AngleB, 0) {
-			issues = append(issues, fmt.Sprintf("hinge %d has non-finite AngleB", h.ID))
+		if math.IsNaN(h.AngleB) || math.IsInf(h.AngleB, 0) || math.IsNaN(h.AngleC) || math.IsInf(h.AngleC, 0) {
+			issues = append(issues, fmt.Sprintf("hinge %d has non-finite AngleB or AngleC", h.ID))
 		}
-		if h.AngleB < 0 || h.AngleB > math.Pi {
-			issues = append(issues, fmt.Sprintf("hinge %d has invalid AngleB %.3f (expected 0..pi radians)", h.ID, h.AngleB))
+		if h.AngleB < 0 || h.AngleB > math.Pi || h.AngleC < 0 || h.AngleC > math.Pi {
+			issues = append(issues, fmt.Sprintf("hinge %d has invalid AngleB/AngleC (expected 0..pi radians)", h.ID))
 		}
 		if !vecFinite(h.AnchorA) {
 			issues = append(issues, fmt.Sprintf("hinge %d has non-finite AnchorA", h.ID))
@@ -132,10 +133,10 @@ func AnalyzeState(top model.Topology, s model.State) DiagnosticReport {
 	issues := append([]string{}, report.Issues...)
 
 	if len(top.Hinges) > 0 {
-		var validMask uint16
+		var validMask uint32
 		for _, h := range top.Hinges {
 			if h.ID < 16 {
-				validMask |= (1 << h.ID)
+				validMask |= (0x3 << (2 * h.ID))
 			}
 		}
 		if s.PoseBits&^validMask != 0 {
@@ -143,6 +144,33 @@ func AnalyzeState(top model.Topology, s model.State) DiagnosticReport {
 		}
 	} else if s.PoseBits != 0 {
 		issues = append(issues, "state has bits set but topology has no hinges")
+	}
+
+	// Collision detection
+	if len(issues) == 0 {
+		solver := kinematics.NewDeterministicSolver()
+		poses, err := solver.Poses(top, s)
+		if err == nil {
+			// Check for cube overlaps. Since each cube is a unit cube centered at Pose.P,
+			// two cubes collide if the distance between their centers is less than 1.0.
+			// However, adjacent cubes connected by a hinge share a face, so their distance is exactly 1.0.
+			// We only flag if distance < 0.99 (allowing some floating point slack).
+			ids := make([]model.CubeID, 0, len(poses))
+			for id := range poses {
+				ids = append(ids, id)
+			}
+			sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+
+			for i := 0; i < len(ids); i++ {
+				for j := i + 1; j < len(ids); j++ {
+					idA, idB := ids[i], ids[j]
+					dist := poses[idA].P.Distance(poses[idB].P)
+					if dist < 0.99 {
+						issues = append(issues, fmt.Sprintf("collision detected between cube %d and cube %d (distance %.3f)", idA, idB, dist))
+					}
+				}
+			}
+		}
 	}
 
 	return DiagnosticReport{Issues: issues}

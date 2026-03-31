@@ -21,7 +21,6 @@
             <option value="infinite-cube-8">infinite-cube-8</option>
           </select>
         </label>
-        <button id="loadPreset">Load</button>
       </div>
       <div id="vizContainer" style="width: 900px; height: 520px; background: #f3f4f6; border-radius: 8px; overflow: hidden; position: relative;"></div>
       <div class="muted mt-8">Red/Green/Blue = X/Y/Z hinge axis. Left-click to rotate, right-click to pan, scroll to zoom.</div>
@@ -112,15 +111,79 @@
     scene.add(axesHelper);
 
     const cubeMeshes = new Map();
+    const targetPoses = new Map();
     const hingeMarkers = new THREE.Group();
     scene.add(hingeMarkers);
 
+    let currentPoseBits = 0;
+    let animationQueue = [];
+    let isMoving = false;
+
+    const clock = new THREE.Clock();
+
     function animate() {
       requestAnimationFrame(animate);
+      const delta = clock.getDelta();
+      const lerpFactor = 10 * delta; // Increased speed for smoother multi-step animation
+
+      let allReached = true;
+      // Smoothly update cube positions and rotations
+      cubeMeshes.forEach((mesh, id) => {
+        const target = targetPoses.get(id);
+        if (target) {
+          mesh.position.lerp(target.p, Math.min(lerpFactor, 1));
+          mesh.quaternion.slerp(target.q, Math.min(lerpFactor, 1));
+
+          if (mesh.position.distanceTo(target.p) > 0.001 || mesh.quaternion.angleTo(target.q) > 0.001) {
+            allReached = false;
+          }
+        }
+      });
+
+      if (allReached && animationQueue.length > 0) {
+        const nextTarget = animationQueue.shift();
+        renderViz(nextTarget);
+      } else if (allReached) {
+        isMoving = false;
+      }
+
+      // We need to redraw hinges every frame because their endpoints depend on cube poses
+      updateHingeMarkers();
+
       controls.update();
       renderer.render(scene, camera);
     }
     animate();
+
+    function updateHingeMarkers() {
+      hingeMarkers.clear();
+      topology.hinges.forEach(hg => {
+        const meshA = cubeMeshes.get(hg.a);
+        const meshB = cubeMeshes.get(hg.b);
+        if (!meshA || !meshB) return;
+
+        const aLocal = hg.anchorA || {x: 0, y: 0, z: 0};
+        const worldA = new THREE.Vector3(aLocal.x, aLocal.y, aLocal.z).applyQuaternion(meshA.quaternion).add(meshA.position);
+
+        let axisLocal;
+        if (hg.axisA === 'X') axisLocal = new THREE.Vector3(1, 0, 0);
+        else if (hg.axisA === 'Y') axisLocal = new THREE.Vector3(0, 1, 0);
+        else axisLocal = new THREE.Vector3(0, 0, 1);
+
+        const axisWorld = axisLocal.clone().applyQuaternion(meshA.quaternion);
+        const p1 = worldA.clone().add(axisWorld.clone().multiplyScalar(-0.4));
+        const p2 = worldA.clone().add(axisWorld.clone().multiplyScalar(0.4));
+
+        const lineGeom = new THREE.BufferGeometry().setFromPoints([p1, p2]);
+        const lineMat = new THREE.LineBasicMaterial({ color: axisColor(hg.axisA), linewidth: 2 });
+        const line = new THREE.Line(lineGeom, lineMat);
+        hingeMarkers.add(line);
+
+        const dot = new THREE.Mesh(new THREE.SphereGeometry(0.05), new THREE.MeshBasicMaterial({ color: 0x000000 }));
+        dot.position.copy(worldA);
+        hingeMarkers.add(dot);
+      });
+    }
 
     function axisColor(axis) {
       if (axis === 'X') return 0xff0000;
@@ -136,7 +199,9 @@
           topology = data;
           renderTable();
           renderToggles();
-          renderViz();
+          currentPoseBits = 0;
+          setPoseBits(0);
+          renderViz(0);
           clearValidation();
           window.exploreStates();
         });
@@ -201,35 +266,120 @@
       box.innerHTML = '';
       topology.hinges.forEach(h => {
         const id = `pose_bit_${h.id}`;
-        const wrap = document.createElement('label');
-        wrap.className = 'toggle';
-        wrap.innerHTML = `<input type="checkbox" id="${id}" data-hinge-id="${h.id}" /> H${h.id}=PoseB`;
-        box.appendChild(wrap);
-        const cb = wrap.querySelector('input');
-        cb.addEventListener('change', () => {
-          renderViz();
+        const wrap = document.createElement('div');
+        wrap.className = 'toggle-group';
+        wrap.style.display = 'flex';
+        wrap.style.alignItems = 'center';
+        wrap.style.gap = '8px';
+        wrap.style.marginBottom = '4px';
+
+        const label = document.createElement('span');
+        label.textContent = `H${h.id}: `;
+        wrap.appendChild(label);
+
+        const select = document.createElement('select');
+        select.id = id;
+        select.dataset.hingeId = h.id;
+        select.innerHTML = `
+          <option value="0">0° (PoseA)</option>
+          <option value="1">180° (PoseB)</option>
+          <option value="2">90° (PoseC)</option>
+        `;
+        select.addEventListener('change', () => {
+          handlePoseChange(readPoseBits());
         });
+        const smartBtn = document.createElement('button');
+        smartBtn.className = 'secondary';
+        smartBtn.style.padding = '2px 6px';
+        smartBtn.style.fontSize = '11px';
+
+        const updateBtnText = () => {
+          smartBtn.textContent = select.value === "0" ? 'Smart Activate' : 'Smart De-activate';
+        };
+        select.addEventListener('change', updateBtnText);
+        updateBtnText();
+
+        smartBtn.addEventListener('click', async () => {
+          const currentVal = Number(select.value);
+
+          if (currentVal === 0) {
+            // Smart Activate: Try PoseB(1), then PoseC(2), then stay at PoseA(0)
+            select.value = "1";
+            let res = await fetchValidation(readPoseBits());
+            if (res.valid) {
+              handlePoseChange(readPoseBits());
+              showValidation(res);
+              updateBtnText();
+              return;
+            }
+
+            select.value = "2";
+            res = await fetchValidation(readPoseBits());
+            if (res.valid) {
+              handlePoseChange(readPoseBits());
+              showValidation(res);
+              updateBtnText();
+              return;
+            }
+
+            select.value = "0";
+            handlePoseChange(readPoseBits());
+            runValidate();
+            updateBtnText();
+          } else {
+            // Smart De-activate: Try PoseA(0), then stay at current
+            const originalVal = String(currentVal);
+            select.value = "0";
+            let res = await fetchValidation(readPoseBits());
+            if (res.valid) {
+              handlePoseChange(readPoseBits());
+              showValidation(res);
+              updateBtnText();
+              return;
+            }
+
+            // If PoseA(0) is somehow blocked (should be rare), fall back to original
+            select.value = originalVal;
+            handlePoseChange(readPoseBits());
+            runValidate();
+            updateBtnText();
+          }
+        });
+        wrap.appendChild(select);
+        wrap.appendChild(smartBtn);
+
+        box.appendChild(wrap);
       });
+    }
+
+    async function fetchValidation(poseBits) {
+      const r = await fetch('/api/validate', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ topology, poseBits }),
+      });
+      return r.json();
     }
 
     function readPoseBits() {
       let bits = 0;
-      document.querySelectorAll('#hingeToggles input[type="checkbox"]').forEach(cb => {
-        if (cb.checked) {
-          const id = Number(cb.dataset.hingeId);
-          if (id >= 0 && id < 16) {
-            bits |= (1 << id);
-          }
+      document.querySelectorAll('#hingeToggles select').forEach(sel => {
+        const id = Number(sel.dataset.hingeId);
+        const val = Number(sel.value);
+        if (id >= 0 && id < 16) {
+          bits |= (val << (2 * id));
         }
       });
       return bits;
     }
 
     function setPoseBits(bits) {
-      document.querySelectorAll('#hingeToggles input[type="checkbox"]').forEach(cb => {
-        const id = Number(cb.dataset.hingeId);
-        const on = id >= 0 && id < 16 && ((bits & (1 << id)) !== 0);
-        cb.checked = on;
+      document.querySelectorAll('#hingeToggles select').forEach(sel => {
+        const id = Number(sel.dataset.hingeId);
+        const val = (bits >> (2 * id)) & 0x3;
+        sel.value = String(val);
+        // Trigger change event to update smart button text
+        sel.dispatchEvent(new Event('change'));
       });
     }
 
@@ -309,10 +459,11 @@
           const li = document.createElement('li');
           const btn = document.createElement('button');
           btn.className = 'secondary';
-          btn.textContent = `${bits.toString(2).padStart(topology.hinges.length, '0')}`;
+          // 2 bits per hinge
+          btn.textContent = `${bits.toString(4).padStart(topology.hinges.length, '0')}`;
           btn.addEventListener('click', () => {
             setPoseBits(bits);
-            renderViz();
+            handlePoseChange(bits);
             runValidate();
           });
           li.appendChild(btn);
@@ -335,8 +486,7 @@
       });
     }
 
-    async function fetchPoses() {
-      const poseBits = readPoseBits();
+    async function fetchPoses(poseBits) {
       const res = await fetch('/api/poses', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
@@ -351,12 +501,50 @@
       return { ok: true, poseBits: data.poseBits, byCube };
     }
 
-    async function renderViz() {
+    function calculateIntermediate(oldBits, newBits) {
+      // For each hinge, if transitioning between PoseA(0) and PoseB(1), pass through PoseC(2).
+      let intermediate = oldBits;
+      let needed = false;
+
+      for (let i = 0; i < topology.hinges.length; i++) {
+        const id = topology.hinges[i].id;
+        const oldPose = (oldBits >> (2 * id)) & 0x3;
+        const newPose = (newBits >> (2 * id)) & 0x3;
+
+        // If flipping 0 <-> 1, inject 2 in between
+        if ((oldPose === 0 && newPose === 1) || (oldPose === 1 && newPose === 0)) {
+          const mask = 0x3 << (2 * id);
+          intermediate = (intermediate & ~mask) | (2 << (2 * id));
+          needed = true;
+        }
+      }
+      return needed ? intermediate : null;
+    }
+
+    function handlePoseChange(newBits) {
+      if (newBits === currentPoseBits) return;
+
+      const intermediate = calculateIntermediate(currentPoseBits, newBits);
+      if (intermediate !== null) {
+        animationQueue = [intermediate, newBits];
+      } else {
+        animationQueue = [newBits];
+      }
+
+      if (!isMoving) {
+        isMoving = true;
+        const next = animationQueue.shift();
+        renderViz(next);
+      }
+      currentPoseBits = newBits;
+    }
+
+    async function renderViz(poseBits) {
       const thisRender = ++renderVersion;
       const poseStatus = document.getElementById('poseStatus');
       poseStatus.textContent = '';
 
-      const poseResult = await fetchPoses();
+      const poseResult = await fetchPoses(poseBits);
       if (thisRender !== renderVersion) return;
       if (!poseResult.ok) {
         document.getElementById('vizLegend').textContent = 'No geometry: solver error.';
@@ -395,43 +583,16 @@
           mesh = new THREE.Mesh(geometry, material);
           scene.add(mesh);
           cubeMeshes.set(id, mesh);
+
+          // For new cubes, jump to position immediately
+          mesh.position.set(pose.p.x, pose.p.y, pose.p.z);
+          mesh.quaternion.set(pose.q.x, pose.q.y, pose.q.z, pose.q.w);
         }
-        mesh.position.set(pose.p.x, pose.p.y, pose.p.z);
-        mesh.quaternion.set(pose.q.x, pose.q.y, pose.q.z, pose.q.w);
-      });
 
-      // Update Hinges
-      hingeMarkers.clear();
-      topology.hinges.forEach(hg => {
-        const poseA = poseResult.byCube.get(hg.a);
-        const poseB = poseResult.byCube.get(hg.b);
-        if (!poseA || !poseB) return;
-
-        const qA = new THREE.Quaternion(poseA.q.x, poseA.q.y, poseA.q.z, poseA.q.w);
-        const qB = new THREE.Quaternion(poseB.q.x, poseB.q.y, poseB.q.z, poseB.q.w);
-
-        const aLocal = hg.anchorA || {x: 0, y: 0, z: 0};
-        const worldA = new THREE.Vector3(aLocal.x, aLocal.y, aLocal.z).applyQuaternion(qA).add(new THREE.Vector3(poseA.p.x, poseA.p.y, poseA.p.z));
-
-        // Hinge line
-        let axisLocal;
-        if (hg.axisA === 'X') axisLocal = new THREE.Vector3(1, 0, 0);
-        else if (hg.axisA === 'Y') axisLocal = new THREE.Vector3(0, 1, 0);
-        else axisLocal = new THREE.Vector3(0, 0, 1);
-
-        const axisWorld = axisLocal.clone().applyQuaternion(qA);
-        const p1 = worldA.clone().add(axisWorld.clone().multiplyScalar(-0.4));
-        const p2 = worldA.clone().add(axisWorld.clone().multiplyScalar(0.4));
-
-        const lineGeom = new THREE.BufferGeometry().setFromPoints([p1, p2]);
-        const lineMat = new THREE.LineBasicMaterial({ color: axisColor(hg.axisA), linewidth: 2 });
-        const line = new THREE.Line(lineGeom, lineMat);
-        hingeMarkers.add(line);
-
-        // Hinge ID Label (Simplified as sphere for now, or just omit if too complex in 3D without CSS2D)
-        const dot = new THREE.Mesh(new THREE.SphereGeometry(0.05), new THREE.MeshBasicMaterial({ color: 0x000000 }));
-        dot.position.copy(worldA);
-        hingeMarkers.add(dot);
+        targetPoses.set(id, {
+          p: new THREE.Vector3(pose.p.x, pose.p.y, pose.p.z),
+          q: new THREE.Quaternion(pose.q.x, pose.q.y, pose.q.z, pose.q.w)
+        });
       });
 
       const cubeLegend = `Cubes: ${cubes.map(c => `Cube ${c}`).join(', ') || '(none)'}`;
@@ -440,7 +601,7 @@
       poseStatus.textContent = `Kinematics source: /api/poses (poseBits=${poseResult.poseBits})`;
     }
 
-    document.getElementById('loadPreset').addEventListener('click', window.loadPreset);
+    document.getElementById('preset').addEventListener('change', window.loadPreset);
     document.getElementById('applyTable').addEventListener('click', window.applyTableEdits);
     document.getElementById('validateBtn').addEventListener('click', window.runValidate);
 

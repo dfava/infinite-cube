@@ -30,13 +30,14 @@ type hingeJSON struct {
 	AxisA   string   `json:"axisA"`
 	SignA   int8     `json:"signA"`
 	AngleB  float64  `json:"angleB"`
+	AngleC  float64  `json:"angleC"`
 	AnchorA vec3JSON `json:"anchorA"`
 	AnchorB vec3JSON `json:"anchorB"`
 }
 
 type validateRequest struct {
 	Topology topologyJSON `json:"topology"`
-	PoseBits uint16       `json:"poseBits"`
+	PoseBits uint32       `json:"poseBits"`
 }
 
 type validateResponse struct {
@@ -44,7 +45,7 @@ type validateResponse struct {
 	Issues      []string `json:"issues"`
 	HingeCount  int      `json:"hingeCount"`
 	CubeCount   int      `json:"cubeCount"`
-	PoseBits    uint16   `json:"poseBits"`
+	PoseBits    uint32   `json:"poseBits"`
 	PoseBitsBin string   `json:"poseBitsBin"`
 	PresetUsed  string   `json:"presetUsed,omitempty"`
 }
@@ -69,7 +70,7 @@ type cubePoseJSON struct {
 }
 
 type posesResponse struct {
-	PoseBits uint16         `json:"poseBits"`
+	PoseBits uint32         `json:"poseBits"`
 	Poses    []cubePoseJSON `json:"poses"`
 }
 
@@ -150,7 +151,7 @@ func handleValidate(w http.ResponseWriter, r *http.Request) {
 }
 
 type enumerateResponse struct {
-	States []uint16 `json:"states"`
+	States []uint32 `json:"states"`
 }
 
 func handleEnumerate(w http.ResponseWriter, r *http.Request) {
@@ -176,7 +177,7 @@ func handleEnumerate(w http.ResponseWriter, r *http.Request) {
 
 	graph := fsm.Enumerate(top, start, validator)
 
-	states := make([]uint16, 0, len(graph.Nodes))
+	states := make([]uint32, 0, len(graph.Nodes))
 	for s := range graph.Nodes {
 		states = append(states, s.PoseBits)
 	}
@@ -258,6 +259,7 @@ func toTopologyJSON(top model.Topology) topologyJSON {
 			AxisA:   h.AxisA.String(),
 			SignA:   h.SignA,
 			AngleB:  h.AngleB,
+			AngleC:  h.AngleC,
 			AnchorA: vec3JSON{X: h.AnchorA.X, Y: h.AnchorA.Y, Z: h.AnchorA.Z},
 			AnchorB: vec3JSON{X: h.AnchorB.X, Y: h.AnchorB.Y, Z: h.AnchorB.Z},
 		})
@@ -292,6 +294,7 @@ func fromTopologyJSON(tj topologyJSON) (model.Topology, error) {
 			AxisA:  axis,
 			SignA:  h.SignA,
 			AngleB: h.AngleB,
+			AngleC: h.AngleC,
 			AnchorA: model.Vec3{
 				X: h.AnchorA.X,
 				Y: h.AnchorA.Y,

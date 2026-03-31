@@ -23,8 +23,9 @@ func TestApplyMoveAndPose(t *testing.T) {
 
 func TestFlip(t *testing.T) {
 	s := State{}
-	s = s.Flip(2)
-	s = s.Flip(2)
+	s = s.Flip(2) // to PoseB (1)
+	s = s.Flip(2) // to PoseC (2)
+	s = s.Flip(2) // to PoseA (0)
 	if s.PoseBits != 0 {
 		t.Fatalf("expected initial state, got %v", s)
 	}

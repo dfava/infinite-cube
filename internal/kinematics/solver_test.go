@@ -90,7 +90,7 @@ func TestThreeCubeOpposed90HasLineLLinePattern(t *testing.T) {
 	solver := NewDeterministicSolver()
 	top := topology.ThreeCubeOpposed90()
 
-	classify := func(bits uint16) (bool, error) {
+	classify := func(bits uint32) (bool, error) {
 		poses, err := solver.Poses(top, model.State{PoseBits: bits})
 		if err != nil {
 			return false, err
@@ -98,19 +98,27 @@ func TestThreeCubeOpposed90HasLineLLinePattern(t *testing.T) {
 		return collinear3(poses[0].P, poses[1].P, poses[2].P), nil
 	}
 
-	c00, err := classify(0b00)
+	// 00, 01, 10, 11 in binary-pose layout (1 bit per hinge)
+	// Now mapped to 2 bits per hinge.
+	// PoseA=0, PoseB=1.
+	// State 00: H0=0, H1=0 => bits 0
+	// State 01: H0=1, H1=0 => bits 1
+	// State 10: H0=0, H1=1 => bits 4 (1 << (2*1))
+	// State 11: H0=1, H1=1 => bits 5 (1 | (1 << 2))
+
+	c00, err := classify(0)
 	if err != nil {
 		t.Fatalf("state 00 error: %v", err)
 	}
-	c01, err := classify(0b01)
+	c01, err := classify(1)
 	if err != nil {
 		t.Fatalf("state 01 error: %v", err)
 	}
-	c10, err := classify(0b10)
+	c10, err := classify(4)
 	if err != nil {
 		t.Fatalf("state 10 error: %v", err)
 	}
-	c11, err := classify(0b11)
+	c11, err := classify(5)
 	if err != nil {
 		t.Fatalf("state 11 error: %v", err)
 	}
