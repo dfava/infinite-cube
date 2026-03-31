@@ -45,6 +45,20 @@
       </table>
     </section>
 
+    <aside class="card transition-graph-col">
+      <h1>Transition Diagram</h1>
+      <div class="muted"><span id="graphNodeCount">0</span> nodes, <span id="graphEdgeCount">0</span> edges. Nodes are states, edges are valid moves.</div>
+      <div id="transitionGraph" style="margin-top: 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; overflow: hidden; height: 300px; position: relative;">
+        <canvas id="graphCanvas"></canvas>
+      </div>
+    </aside>
+
+    <aside class="card explorer-col">
+      <h1>State Explorer</h1>
+      <div class="muted">Jump through all reachable states for the current configuration.</div>
+      <div id="exploreList" style="margin-top: 8px;"></div>
+    </aside>
+
     <aside class="card validator-col">
       <h1>Validator</h1>
       <div class="muted">`StructuralValidator` + diagnostics from `AnalyzeState`.</div>
@@ -53,23 +67,14 @@
       <div id="status" class="status">No run yet.</div>
       <div id="meta" class="muted mt-8"></div>
       <ul id="issues" class="issues"></ul>
+    </aside>
 
-      <h1 style="margin-top: 14px;">Pose Debug</h1>
+    <aside class="card pose-debug-col">
+      <h1>Pose Debug</h1>
       <div class="muted">Cube transforms from `/api/poses` for current state.</div>
       <pre id="posePanel" style="white-space: pre-wrap; font-size: 12px; line-height: 1.35;"></pre>
     </aside>
 
-    <aside class="card explorer-col">
-      <h1>State Explorer</h1>
-      <div class="muted">Jump through all reachable states for the current configuration.</div>
-      <div id="exploreList" style="margin-top: 8px;"></div>
-      
-      <h1 style="margin-top: 20px;">Transition Diagram</h1>
-      <div class="muted"><span id="graphNodeCount">0</span> nodes, <span id="graphEdgeCount">0</span> edges. Nodes are states, edges are valid moves.</div>
-      <div id="transitionGraph" style="margin-top: 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; overflow: hidden; height: 300px; position: relative;">
-        <canvas id="graphCanvas"></canvas>
-      </div>
-    </aside>
   </div>
 
   <script type="importmap">
