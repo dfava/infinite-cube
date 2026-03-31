@@ -197,6 +197,31 @@
         const dot = new THREE.Mesh(new THREE.SphereGeometry(0.05), new THREE.MeshBasicMaterial({ color: 0x000000 }));
         dot.position.copy(worldA);
         hingeMarkers.add(dot);
+
+        // Add Hinge ID label
+        const hCanvas = document.createElement('canvas');
+        hCanvas.width = 64;
+        hCanvas.height = 64;
+        const hContext = hCanvas.getContext('2d');
+        hContext.fillStyle = 'rgba(0, 0, 0, 0.7)'; // Slightly transparent black
+        hContext.font = 'Bold 40px Arial';
+        hContext.textAlign = 'center';
+        hContext.textBaseline = 'middle';
+        hContext.fillText('H' + hg.id.toString(), 32, 32);
+        
+        const hTexture = new THREE.CanvasTexture(hCanvas);
+        const hLabelMaterial = new THREE.SpriteMaterial({ 
+          map: hTexture,
+          depthTest: false,
+          depthWrite: false,
+          sizeAttenuation: true
+        });
+        const hSprite = new THREE.Sprite(hLabelMaterial);
+        hSprite.scale.set(0.2, 0.2, 1); // Slightly smaller than cube labels (0.3)
+        hSprite.renderOrder = 1000;
+        // Position it slightly away from the dot so it's readable
+        hSprite.position.copy(worldA).add(new THREE.Vector3(0, 0.1, 0));
+        hingeMarkers.add(hSprite);
       });
     }
 
