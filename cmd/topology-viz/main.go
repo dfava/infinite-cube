@@ -24,15 +24,16 @@ type topologyJSON struct {
 }
 
 type hingeJSON struct {
-	ID      int      `json:"id"`
-	A       int      `json:"a"`
-	B       int      `json:"b"`
-	AxisA   string   `json:"axisA"`
-	SignA   int8     `json:"signA"`
-	AngleB  float64  `json:"angleB"`
-	AngleC  float64  `json:"angleC"`
-	AnchorA vec3JSON `json:"anchorA"`
-	AnchorB vec3JSON `json:"anchorB"`
+	ID          int      `json:"id"`
+	A           int      `json:"a"`
+	B           int      `json:"b"`
+	AxisA       string   `json:"axisA"`
+	SignA       int8     `json:"signA"`
+	AngleB      float64  `json:"angleB"`
+	AngleC      float64  `json:"angleC"`
+	InitialPose int      `json:"initialPose"`
+	AnchorA     vec3JSON `json:"anchorA"`
+	AnchorB     vec3JSON `json:"anchorB"`
 }
 
 type validateRequest struct {
@@ -255,15 +256,16 @@ func toTopologyJSON(top model.Topology) topologyJSON {
 	hinges := make([]hingeJSON, 0, len(top.Hinges))
 	for _, h := range top.Hinges {
 		hinges = append(hinges, hingeJSON{
-			ID:      int(h.ID),
-			A:       int(h.A),
-			B:       int(h.B),
-			AxisA:   h.AxisA.String(),
-			SignA:   h.SignA,
-			AngleB:  h.Angle180,
-			AngleC:  h.Angle90,
-			AnchorA: vec3JSON{X: h.AnchorA.X, Y: h.AnchorA.Y, Z: h.AnchorA.Z},
-			AnchorB: vec3JSON{X: h.AnchorB.X, Y: h.AnchorB.Y, Z: h.AnchorB.Z},
+			ID:          int(h.ID),
+			A:           int(h.A),
+			B:           int(h.B),
+			AxisA:       h.AxisA.String(),
+			SignA:       h.SignA,
+			AngleB:      h.Angle180,
+			AngleC:      h.Angle90,
+			InitialPose: int(h.InitialPose),
+			AnchorA:     vec3JSON{X: h.AnchorA.X, Y: h.AnchorA.Y, Z: h.AnchorA.Z},
+			AnchorB:     vec3JSON{X: h.AnchorB.X, Y: h.AnchorB.Y, Z: h.AnchorB.Z},
 		})
 	}
 	return topologyJSON{Cubes: cubes, Hinges: hinges}
@@ -290,13 +292,14 @@ func fromTopologyJSON(tj topologyJSON) (model.Topology, error) {
 			return model.Topology{}, fmt.Errorf("hinge %d: %w", h.ID, err)
 		}
 		hinges = append(hinges, model.Hinge{
-			ID:       model.HingeID(h.ID),
-			A:        model.CubeID(h.A),
-			B:        model.CubeID(h.B),
-			AxisA:    axis,
-			SignA:    h.SignA,
-			Angle180: h.AngleB,
-			Angle90:  h.AngleC,
+			ID:          model.HingeID(h.ID),
+			A:           model.CubeID(h.A),
+			B:           model.CubeID(h.B),
+			AxisA:       axis,
+			SignA:       h.SignA,
+			Angle180:    h.AngleB,
+			Angle90:     h.AngleC,
+			InitialPose: model.HingePose(h.InitialPose),
 			AnchorA: model.Vec3{
 				X: h.AnchorA.X,
 				Y: h.AnchorA.Y,

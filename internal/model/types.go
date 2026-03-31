@@ -24,8 +24,9 @@ type Hinge struct {
 	SignA int8 // +1 or -1 for orientation convention
 	// Angle90/Angle180 are hinge rotations (radians) used when state pose is Pose90/Pose180.
 	// Zero defaults to pi/2 for Angle90 and pi for Angle180.
-	Angle90  float64
-	Angle180 float64
+	Angle90     float64
+	Angle180    float64
+	InitialPose HingePose
 	// AnchorA/AnchorB are hinge attachment points in each cube's local frame.
 	AnchorA Vec3
 	AnchorB Vec3

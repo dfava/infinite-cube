@@ -21,6 +21,7 @@
             <option value="infinite-cube-8">infinite-cube-8</option>
           </select>
         </label>
+        <button id="resetPose" class="secondary">Reset to Initial Pose</button>
       </div>
       <div id="vizContainer" style="width: 900px; height: 520px; background: #f3f4f6; border-radius: 8px; overflow: hidden; position: relative;"></div>
       <div class="muted mt-8">Red/Green/Blue = X/Y/Z hinge axis. Left-click to rotate, right-click to pan, scroll to zoom.</div>
@@ -55,7 +56,7 @@
       <table>
         <thead>
           <tr>
-            <th>ID</th><th>A</th><th>B</th><th>AxisA</th><th>SignA</th><th>AnchorA (x,y,z)</th><th>AnchorB (x,y,z)</th>
+            <th>ID</th><th>A</th><th>B</th><th>AxisA</th><th>SignA</th><th>Initial Pose</th><th>AnchorA (x,y,z)</th><th>AnchorB (x,y,z)</th>
           </tr>
         </thead>
         <tbody id="hingeBody"></tbody>
@@ -176,6 +177,12 @@
         const line = new THREE.Line(lineGeom, lineMat);
         hingeMarkers.add(line);
 
+        // Add Direction Arrow to indicate rotation sign
+        const arrowDir = axisWorld.clone().multiplyScalar(hg.signA || 1);
+        const arrowPos = worldA.clone().add(axisWorld.clone().multiplyScalar(0.4 * (hg.signA || 1)));
+        const arrowHelper = new THREE.ArrowHelper(arrowDir, arrowPos, 0.15, axisColor(hg.axisA), 0.1, 0.08);
+        hingeMarkers.add(arrowHelper);
+
         const dot = new THREE.Mesh(new THREE.SphereGeometry(0.05), new THREE.MeshBasicMaterial({ color: 0x000000 }));
         dot.position.copy(worldA);
         hingeMarkers.add(dot);
@@ -196,13 +203,29 @@
           topology = data;
           renderTable();
           renderToggles();
-          currentPoseBits = 0;
-          setPoseBits(0);
-          renderViz(0);
+          
+          let initialBits = 0;
+          topology.hinges.forEach(h => {
+            initialBits |= (h.initialPose << (2 * h.id));
+          });
+          
+          currentPoseBits = initialBits;
+          setPoseBits(initialBits);
+          renderViz(initialBits);
           window.runValidate();
           window.exploreStates();
         });
     }
+
+    document.getElementById('resetPose').addEventListener('click', () => {
+      let initialBits = 0;
+      topology.hinges.forEach(h => {
+        initialBits |= (h.initialPose << (2 * h.id));
+      });
+      setPoseBits(initialBits);
+      handlePoseChange(initialBits);
+      window.runValidate();
+    });
 
     function renderTable() {
       const tbody = document.getElementById('hingeBody');
@@ -224,6 +247,13 @@
             <select data-i="${i}" data-k="signA">
               <option value="1" ${h.signA===1?'selected':''}>+1</option>
               <option value="-1" ${h.signA===-1?'selected':''}>-1</option>
+            </select>
+          </td>
+          <td>
+            <select data-i="${i}" data-k="initialPose">
+              <option value="0" ${h.initialPose===0?'selected':''}>0°</option>
+              <option value="1" ${h.initialPose===1?'selected':''}>90°</option>
+              <option value="2" ${h.initialPose===2?'selected':''}>180°</option>
             </select>
           </td>
           <td><input type="text" value="${h.anchorA?.x ?? 0},${h.anchorA?.y ?? 0},${h.anchorA?.z ?? 0}" data-i="${i}" data-k="anchorA" /></td>
@@ -581,6 +611,33 @@
           mesh = new THREE.Mesh(geometry, material);
           scene.add(mesh);
           cubeMeshes.set(id, mesh);
+
+          // Add Cube ID label
+          const canvas = document.createElement('canvas');
+          canvas.width = 128;
+          canvas.height = 128;
+          const context = canvas.getContext('2d');
+          context.fillStyle = 'rgba(255, 255, 255, 0)'; // Transparent background
+          context.fillRect(0, 0, 128, 128);
+          // No border
+          context.fillStyle = 'black';
+          context.font = 'Bold 80px Arial';
+          context.textAlign = 'center';
+          context.textBaseline = 'middle';
+          context.fillText(id.toString(), 64, 64);
+          
+          const texture = new THREE.CanvasTexture(canvas);
+          const labelMaterial = new THREE.SpriteMaterial({ 
+            map: texture,
+            depthTest: false,
+            depthWrite: false,
+            sizeAttenuation: true
+          });
+          const sprite = new THREE.Sprite(labelMaterial);
+          sprite.scale.set(0.3, 0.3, 1); // Half the previous size (was 0.6)
+          sprite.renderOrder = 999;
+          sprite.position.set(0, 0, 0.3); // Closer to center
+          mesh.add(sprite);
 
           // For new cubes, jump to position immediately
           mesh.position.set(pose.p.x, pose.p.y, pose.p.z);
