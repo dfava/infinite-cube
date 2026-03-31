@@ -16,8 +16,8 @@
           <select id="preset">
             <option value="two-cube-hinge">two-cube-hinge</option>
             <option value="three-cube-line">three-cube-line</option>
-            <option value="three-cube-l">three-cube-L</option>
             <option value="three-opposed-90">three-opposed-90</option>
+            <option value="three-cube-z">three-cube-z</option>
             <option value="infinite-cube-8">infinite-cube-8</option>
           </select>
         </label>
@@ -25,7 +25,7 @@
         <button id="applyTable" class="secondary">Apply Table Edits</button>
       </div>
       <div id="vizContainer" style="width: 900px; height: 520px; background: #f3f4f6; border-radius: 8px; overflow: hidden; position: relative;"></div>
-      <div class="muted mt-8">Blue/green/orange = X/Y/Z hinge axis. Left-click to rotate, right-click to pan, scroll to zoom.</div>
+      <div class="muted mt-8">Red/Green/Blue = X/Y/Z hinge axis. Left-click to rotate, right-click to pan, scroll to zoom.</div>
       <div id="vizLegend" class="muted mt-6"></div>
       <div id="poseStatus" class="muted mt-6"></div>
     </section>
@@ -108,6 +108,10 @@
     grid.position.y = -0.51; // Just below the unit cubes
     scene.add(grid);
 
+    // Axes Helper
+    const axesHelper = new THREE.AxesHelper(5);
+    scene.add(axesHelper);
+
     const cubeMeshes = new Map();
     const hingeMarkers = new THREE.Group();
     scene.add(hingeMarkers);
@@ -120,9 +124,9 @@
     animate();
 
     function axisColor(axis) {
-      if (axis === 'X') return 0x1d4ed8;
-      if (axis === 'Y') return 0x047857;
-      return 0xb45309;
+      if (axis === 'X') return 0xff0000;
+      if (axis === 'Y') return 0x00ff00;
+      return 0x0000ff;
     }
 
     window.loadPreset = function() {

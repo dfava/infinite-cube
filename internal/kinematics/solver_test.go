@@ -86,25 +86,6 @@ func TestDeterministicSolverRejectsUnknownCubeReference(t *testing.T) {
 	}
 }
 
-func TestThreeCubeLineVsLShapeDiffer(t *testing.T) {
-	solver := NewDeterministicSolver()
-	state := model.State{}
-
-	linePoses, err := solver.Poses(topology.ThreeCubeLine(), state)
-	if err != nil {
-		t.Fatalf("line poses error: %v", err)
-	}
-	lPoses, err := solver.Poses(topology.ThreeCubeL(), state)
-	if err != nil {
-		t.Fatalf("L poses error: %v", err)
-	}
-
-	// Cube 2 differs because hinge attachment on cube 1 differs.
-	if linePoses[2].P.AlmostEqual(lPoses[2].P, 1e-9) {
-		t.Fatalf("expected cube 2 position to differ between line and L topologies: line=%+v L=%+v", linePoses[2].P, lPoses[2].P)
-	}
-}
-
 func TestThreeCubeOpposed90HasLineLLinePattern(t *testing.T) {
 	solver := NewDeterministicSolver()
 	top := topology.ThreeCubeOpposed90()

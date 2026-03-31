@@ -102,10 +102,10 @@ func handleTopology(w http.ResponseWriter, r *http.Request) {
 		top = topology.TwoCubeHinge()
 	case "three-cube-line":
 		top = topology.ThreeCubeLine()
-	case "three-cube-l":
-		top = topology.ThreeCubeL()
 	case "three-opposed-90":
 		top = topology.ThreeCubeOpposed90()
+	case "three-cube-z":
+		top = topology.ThreeCubeZ()
 	case "infinite-cube-8":
 		top = topology.InfiniteCube8()
 	default:
