@@ -11,16 +11,12 @@ import (
 // DeterministicSolver computes poses by propagating hinge transforms across the topology graph.
 // It is deterministic but intentionally simple; it is a kinematic scaffold, not a full rigid-body solver.
 type DeterministicSolver struct {
-	// LinkLength controls center-to-center offset between cubes across a hinge.
-	LinkLength float64
-
 	// ComponentSpacing separates disconnected components.
 	ComponentSpacing float64
 }
 
 func NewDeterministicSolver() DeterministicSolver {
 	return DeterministicSolver{
-		LinkLength:       1,
 		ComponentSpacing: 3,
 	}
 }
@@ -28,9 +24,6 @@ func NewDeterministicSolver() DeterministicSolver {
 func (s DeterministicSolver) Poses(top model.Topology, state model.State) (map[model.CubeID]model.Pose, error) {
 	if len(top.Cubes) == 0 {
 		return nil, fmt.Errorf("empty topology")
-	}
-	if s.LinkLength <= 0 {
-		return nil, fmt.Errorf("invalid LinkLength %v", s.LinkLength)
 	}
 	if s.ComponentSpacing <= 0 {
 		return nil, fmt.Errorf("invalid ComponentSpacing %v", s.ComponentSpacing)
@@ -98,10 +91,10 @@ func (s DeterministicSolver) Poses(top model.Topology, state model.State) (map[m
 				var nextPose model.Pose
 				if in.fromA {
 					next = in.hinge.B
-					nextPose = propagateAtoB(curPose, in.hinge, state, s.LinkLength)
+					nextPose = propagateAtoB(curPose, in.hinge, state)
 				} else {
 					next = in.hinge.A
-					nextPose = propagateBtoA(curPose, in.hinge, state, s.LinkLength)
+					nextPose = propagateBtoA(curPose, in.hinge, state)
 				}
 
 				if !visited[next] {
@@ -122,23 +115,22 @@ func (s DeterministicSolver) Poses(top model.Topology, state model.State) (map[m
 	return poses, nil
 }
 
-func propagateAtoB(a model.Pose, h model.Hinge, s model.State, linkLength float64) model.Pose {
+func propagateAtoB(a model.Pose, h model.Hinge, s model.State) model.Pose {
 	qRel := hingeRelativeRotation(h, s)
-	offA := hingeOffsetInA(h, linkLength)
-	worldOff := a.Q.Rotate(offA)
+	qB := a.Q.Mul(qRel).Normalize()
+	worldAnchor := a.P.Add(a.Q.Rotate(h.AnchorA))
 	return model.Pose{
-		P: a.P.Add(worldOff),
-		Q: a.Q.Mul(qRel).Normalize(),
+		P: worldAnchor.Sub(qB.Rotate(h.AnchorB)),
+		Q: qB,
 	}
 }
 
-func propagateBtoA(b model.Pose, h model.Hinge, s model.State, linkLength float64) model.Pose {
+func propagateBtoA(b model.Pose, h model.Hinge, s model.State) model.Pose {
 	qRel := hingeRelativeRotation(h, s)
 	qA := b.Q.Mul(qRel.Conj()).Normalize()
-	offA := hingeOffsetInA(h, linkLength)
-	worldOff := qA.Rotate(offA)
+	worldAnchor := b.P.Add(b.Q.Rotate(h.AnchorB))
 	return model.Pose{
-		P: b.P.Sub(worldOff),
+		P: worldAnchor.Sub(qA.Rotate(h.AnchorA)),
 		Q: qA,
 	}
 }
@@ -153,13 +145,4 @@ func hingeRelativeRotation(h model.Hinge, s model.State) model.Quat {
 	}
 	axis := h.AxisA.UnitVector()
 	return model.QuatFromAxisAngle(axis, sign*math.Pi)
-}
-
-func hingeOffsetInA(h model.Hinge, linkLength float64) model.Vec3 {
-	base := h.AxisA.PerpVector()
-	sign := 1.0
-	if h.SignA < 0 {
-		sign = -1
-	}
-	return base.Scale(sign * linkLength)
 }

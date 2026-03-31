@@ -27,3 +27,7 @@ func (v Vec3) Distance(other Vec3) float64 {
 	dz := v.Z - other.Z
 	return math.Sqrt(dx*dx + dy*dy + dz*dz)
 }
+
+func (v Vec3) AlmostEqual(other Vec3, eps float64) bool {
+	return v.Distance(other) <= eps
+}

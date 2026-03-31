@@ -16,13 +16,15 @@
           <select id="preset">
             <option value="infinite8">infinite8</option>
             <option value="simple">simple</option>
+            <option value="three-line">three-line</option>
+            <option value="three-l">three-l</option>
           </select>
         </label>
         <button id="loadPreset">Load</button>
         <button id="applyTable" class="secondary">Apply Table Edits</button>
       </div>
       <svg id="viz" viewBox="0 0 900 520"></svg>
-      <div class="muted mt-8">Blue/green/orange = X/Y/Z axis. Arrow direction on each cube marks `SignA` for that hinge.</div>
+      <div class="muted mt-8">Blue/green/orange = X/Y/Z axis. Arrow direction on each cube marks `SignA` for that hinge. Anchors define where each hinge attaches.</div>
       <div id="vizLegend" class="muted mt-6"></div>
       <div id="poseStatus" class="muted mt-6"></div>
     </section>
@@ -42,11 +44,11 @@
 
     <section class="card full-span">
       <h1>Hinges</h1>
-      <div class="muted">`AxisA` is X/Y/Z in cube A's local frame. `SignA` is positive rotation direction (+1/-1).</div>
+      <div class="muted">`AxisA` is X/Y/Z in cube A's local frame. `SignA` is positive rotation direction (+1/-1). `AnchorA/B` are local attachment points.</div>
       <table>
         <thead>
           <tr>
-            <th>ID</th><th>A</th><th>B</th><th>AxisA</th><th>SignA</th>
+            <th>ID</th><th>A</th><th>B</th><th>AxisA</th><th>SignA</th><th>AnchorA (x,y,z)</th><th>AnchorB (x,y,z)</th>
           </tr>
         </thead>
         <tbody id="hingeBody"></tbody>
@@ -98,6 +100,8 @@
               <option value="-1" ${h.signA===-1?'selected':''}>-1</option>
             </select>
           </td>
+          <td><input type="text" value="${h.anchorA?.x ?? 0},${h.anchorA?.y ?? 0},${h.anchorA?.z ?? 0}" data-i="${i}" data-k="anchorA" /></td>
+          <td><input type="text" value="${h.anchorB?.x ?? 0},${h.anchorB?.y ?? 0},${h.anchorB?.z ?? 0}" data-i="${i}" data-k="anchorB" /></td>
         `;
         tbody.appendChild(row);
       });
@@ -109,6 +113,15 @@
         const k = el.dataset.k;
         if (k === 'axisA') {
           topology.hinges[i][k] = el.value;
+          return;
+        }
+        if (k === 'anchorA' || k === 'anchorB') {
+          const parts = String(el.value).split(',').map(v => Number(v.trim()));
+          topology.hinges[i][k] = {
+            x: Number.isFinite(parts[0]) ? parts[0] : 0,
+            y: Number.isFinite(parts[1]) ? parts[1] : 0,
+            z: Number.isFinite(parts[2]) ? parts[2] : 0,
+          };
           return;
         }
         topology.hinges[i][k] = Number(el.value);
@@ -377,19 +390,42 @@
       }
 
       topology.hinges.forEach(hg => {
-        const a = cubeCenters2D.get(hg.a);
-        const b = cubeCenters2D.get(hg.b);
-        if (!a || !b) return;
+        const centerA3 = cubeCenters3D.get(hg.a);
+        const centerB3 = cubeCenters3D.get(hg.b);
+        const qA = cubeQuats.get(hg.a);
+        const qB = cubeQuats.get(hg.b);
+        if (!centerA3 || !centerB3 || !qA || !qB) return;
+
+        const aLocal = hg.anchorA || {x: 0, y: 0, z: 0};
+        const bLocal = hg.anchorB || {x: 0, y: 0, z: 0};
+        const worldA = v3Add(centerA3, quatRotate(qA, v3(aLocal.x, aLocal.y, aLocal.z)));
+        const worldB = v3Add(centerB3, quatRotate(qB, v3(bLocal.x, bLocal.y, bLocal.z)));
+        const a2 = add(projectPosePoint(worldA), offset);
+        const b2 = add(projectPosePoint(worldB), offset);
+
         const link = createSVG('line');
-        link.setAttribute('x1', a.x + offset.x);
-        link.setAttribute('y1', a.y + offset.y);
-        link.setAttribute('x2', b.x + offset.x);
-        link.setAttribute('y2', b.y + offset.y);
+        link.setAttribute('x1', a2.x);
+        link.setAttribute('y1', a2.y);
+        link.setAttribute('x2', b2.x);
+        link.setAttribute('y2', b2.y);
         link.setAttribute('stroke', axisColor(hg.axisA));
-        link.setAttribute('stroke-width', '2');
-        link.setAttribute('stroke-dasharray', '6 5');
-        link.setAttribute('opacity', '0.45');
+        link.setAttribute('stroke-width', '2.5');
+        link.setAttribute('opacity', '0.85');
         svg.appendChild(link);
+
+        const dotA = createSVG('circle');
+        dotA.setAttribute('cx', a2.x);
+        dotA.setAttribute('cy', a2.y);
+        dotA.setAttribute('r', '3.5');
+        dotA.setAttribute('fill', '#111827');
+        svg.appendChild(dotA);
+
+        const dotB = createSVG('circle');
+        dotB.setAttribute('cx', b2.x);
+        dotB.setAttribute('cy', b2.y);
+        dotB.setAttribute('r', '3.5');
+        dotB.setAttribute('fill', '#374151');
+        svg.appendChild(dotB);
       });
 
       const drawOrder = cubes.filter(c => cubeCenters2D.has(c)).sort((a, b) => {
@@ -460,8 +496,10 @@
         const centerA2 = cubeCenters2D.get(hg.a);
         const centerB2 = cubeCenters2D.get(hg.b);
         const centerA3 = cubeCenters3D.get(hg.a);
+        const centerB3 = cubeCenters3D.get(hg.b);
         const qA = cubeQuats.get(hg.a);
-        if (!centerA2 || !centerB2 || !centerA3 || !qA) return;
+        const qB = cubeQuats.get(hg.b);
+        if (!centerA2 || !centerB2 || !centerA3 || !centerB3 || !qA || !qB) return;
 
         const sign = normalizeSign(hg.signA);
         const signColor = sign === 1 ? '#166534' : '#b91c1c';
@@ -479,7 +517,13 @@
         const centerIndex = (sameA.length - 1) / 2;
         const lane = idxOnA - centerIndex;
         const laneOffset = 9 * lane;
-        const markerCenter = add(add(centerA2, offset), scale(perp, laneOffset));
+        const aLocal = hg.anchorA || {x: 0, y: 0, z: 0};
+        const bLocal = hg.anchorB || {x: 0, y: 0, z: 0};
+        const worldA = v3Add(centerA3, quatRotate(qA, v3(aLocal.x, aLocal.y, aLocal.z)));
+        const worldB = v3Add(centerB3, quatRotate(qB, v3(bLocal.x, bLocal.y, bLocal.z)));
+        const anchorA2 = add(projectPosePoint(worldA), offset);
+        const anchorB2 = add(projectPosePoint(worldB), offset);
+        const markerCenter = add(anchorA2, scale(perp, laneOffset));
         const len = 19;
 
         const p1 = add(markerCenter, scale(dir, -len));
@@ -507,7 +551,7 @@
         arrow.setAttribute('stroke-width', '1');
         svg.appendChild(arrow);
 
-        const mid = {x: (markerCenter.x + centerB2.x + offset.x) / 2, y: (markerCenter.y + centerB2.y + offset.y) / 2};
+        const mid = {x: (markerCenter.x + anchorB2.x) / 2, y: (markerCenter.y + anchorB2.y) / 2};
         const text = createSVG('text');
         text.setAttribute('x', mid.x + 6);
         text.setAttribute('y', mid.y - 6);

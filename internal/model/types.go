@@ -21,6 +21,9 @@ type Hinge struct {
 	B     CubeID
 	AxisA Axis
 	SignA int8 // +1 or -1 for orientation convention
+	// AnchorA/AnchorB are hinge attachment points in each cube's local frame.
+	AnchorA Vec3
+	AnchorB Vec3
 }
 
 // Topology contains fixed cube and hinge connectivity.

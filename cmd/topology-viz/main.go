@@ -23,11 +23,13 @@ type topologyJSON struct {
 }
 
 type hingeJSON struct {
-	ID    int    `json:"id"`
-	A     int    `json:"a"`
-	B     int    `json:"b"`
-	AxisA string `json:"axisA"`
-	SignA int8   `json:"signA"`
+	ID      int      `json:"id"`
+	A       int      `json:"a"`
+	B       int      `json:"b"`
+	AxisA   string   `json:"axisA"`
+	SignA   int8     `json:"signA"`
+	AnchorA vec3JSON `json:"anchorA"`
+	AnchorB vec3JSON `json:"anchorB"`
 }
 
 type validateRequest struct {
@@ -97,6 +99,10 @@ func handleTopology(w http.ResponseWriter, r *http.Request) {
 	switch preset {
 	case "simple":
 		top = topology.Simple()
+	case "three-line":
+		top = topology.ThreeCubeLine()
+	case "three-l":
+		top = topology.ThreeCubeL()
 	case "infinite8":
 		top = topology.InfiniteCube8()
 	default:
@@ -201,11 +207,13 @@ func toTopologyJSON(top model.Topology) topologyJSON {
 	hinges := make([]hingeJSON, 0, len(top.Hinges))
 	for _, h := range top.Hinges {
 		hinges = append(hinges, hingeJSON{
-			ID:    int(h.ID),
-			A:     int(h.A),
-			B:     int(h.B),
-			AxisA: h.AxisA.String(),
-			SignA: h.SignA,
+			ID:      int(h.ID),
+			A:       int(h.A),
+			B:       int(h.B),
+			AxisA:   h.AxisA.String(),
+			SignA:   h.SignA,
+			AnchorA: vec3JSON{X: h.AnchorA.X, Y: h.AnchorA.Y, Z: h.AnchorA.Z},
+			AnchorB: vec3JSON{X: h.AnchorB.X, Y: h.AnchorB.Y, Z: h.AnchorB.Z},
 		})
 	}
 	return topologyJSON{Cubes: cubes, Hinges: hinges}
@@ -237,6 +245,16 @@ func fromTopologyJSON(tj topologyJSON) (model.Topology, error) {
 			B:     model.CubeID(h.B),
 			AxisA: axis,
 			SignA: h.SignA,
+			AnchorA: model.Vec3{
+				X: h.AnchorA.X,
+				Y: h.AnchorA.Y,
+				Z: h.AnchorA.Z,
+			},
+			AnchorB: model.Vec3{
+				X: h.AnchorB.X,
+				Y: h.AnchorB.Y,
+				Z: h.AnchorB.Z,
+			},
 		})
 	}
 	return model.Topology{Cubes: cubes, Hinges: hinges}, nil

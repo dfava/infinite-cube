@@ -32,9 +32,8 @@ func TestDeterministicSolverSimplePoseA(t *testing.T) {
 		t.Fatalf("expected cube 0 identity orientation, got %+v", p0.Q)
 	}
 
-	// Simple topology hinge: axis X, sign +1, so offset uses +Y in cube A frame.
-	if p1.P != (model.Vec3{Y: 1}) {
-		t.Fatalf("expected cube 1 at +Y offset, got %+v", p1.P)
+	if p1.P != (model.Vec3{X: 1}) {
+		t.Fatalf("expected cube 1 at +X offset from anchors, got %+v", p1.P)
 	}
 	if p1.Q != (model.Quat{W: 1}) {
 		t.Fatalf("expected PoseA to keep identity orientation, got %+v", p1.Q)
@@ -83,5 +82,24 @@ func TestDeterministicSolverRejectsUnknownCubeReference(t *testing.T) {
 
 	if _, err := solver.Poses(top, model.State{}); err == nil {
 		t.Fatalf("expected error for unknown cube reference")
+	}
+}
+
+func TestThreeCubeLineVsLShapeDiffer(t *testing.T) {
+	solver := NewDeterministicSolver()
+	state := model.State{}
+
+	linePoses, err := solver.Poses(topology.ThreeCubeLine(), state)
+	if err != nil {
+		t.Fatalf("line poses error: %v", err)
+	}
+	lPoses, err := solver.Poses(topology.ThreeCubeL(), state)
+	if err != nil {
+		t.Fatalf("L poses error: %v", err)
+	}
+
+	// Cube 2 differs because hinge attachment on cube 1 differs.
+	if linePoses[2].P.AlmostEqual(lPoses[2].P, 1e-9) {
+		t.Fatalf("expected cube 2 position to differ between line and L topologies: line=%+v L=%+v", linePoses[2].P, lPoses[2].P)
 	}
 }

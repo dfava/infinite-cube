@@ -2,6 +2,7 @@ package validate
 
 import (
 	"fmt"
+	"math"
 	"sort"
 
 	"infinite-cube/internal/model"
@@ -82,6 +83,12 @@ func AnalyzeTopology(top model.Topology) DiagnosticReport {
 		if h.SignA != 1 && h.SignA != -1 {
 			issues = append(issues, fmt.Sprintf("hinge %d has invalid SignA value %d (expected +1 or -1)", h.ID, h.SignA))
 		}
+		if !vecFinite(h.AnchorA) {
+			issues = append(issues, fmt.Sprintf("hinge %d has non-finite AnchorA", h.ID))
+		}
+		if !vecFinite(h.AnchorB) {
+			issues = append(issues, fmt.Sprintf("hinge %d has non-finite AnchorB", h.ID))
+		}
 
 		p := canonicalPair(h.A, h.B)
 		if prev, exists := pairs[p]; exists {
@@ -137,4 +144,10 @@ func canonicalPair(a, b model.CubeID) [2]model.CubeID {
 		return [2]model.CubeID{a, b}
 	}
 	return [2]model.CubeID{b, a}
+}
+
+func vecFinite(v model.Vec3) bool {
+	return !math.IsNaN(v.X) && !math.IsInf(v.X, 0) &&
+		!math.IsNaN(v.Y) && !math.IsInf(v.Y, 0) &&
+		!math.IsNaN(v.Z) && !math.IsInf(v.Z, 0)
 }
