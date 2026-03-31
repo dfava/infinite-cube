@@ -30,6 +30,7 @@
           </select>
         </label>
         <button id="resetPose" class="secondary">Reset to Initial Pose</button>
+        <button id="randomWalkBtn" class="secondary">Start Random Walk</button>
       </div>
       <div id="vizContainer"></div>
       <div class="muted mt-8">Red/Green/Blue = X/Y/Z hinge axis. Left-click to rotate, right-click to pan, scroll to zoom.</div>
@@ -148,6 +149,8 @@
     let currentPoseBits = 0;
     let animationQueue = [];
     let isMoving = false;
+    let isRandomWalking = false;
+    let walkTimer = null;
 
     const clock = new THREE.Clock();
 
@@ -253,6 +256,7 @@
     }
 
     window.loadPreset = function() {
+      stopRandomWalk();
       const preset = document.getElementById('preset').value;
       fetch(`/api/topology?preset=${encodeURIComponent(preset)}`)
         .then(r => r.json())
@@ -275,6 +279,7 @@
     }
 
     document.getElementById('resetPose').addEventListener('click', () => {
+      stopRandomWalk();
       let initialBits = 0;
       topology.hinges.forEach(h => {
         initialBits |= (h.initialPose << (2 * h.id));
@@ -283,6 +288,56 @@
       handlePoseChange(initialBits);
       window.runValidate(initialBits);
     });
+
+    document.getElementById('randomWalkBtn').addEventListener('click', () => {
+      if (isRandomWalking) {
+        stopRandomWalk();
+      } else {
+        startRandomWalk();
+      }
+    });
+
+    function startRandomWalk() {
+      if (isRandomWalking) return;
+      isRandomWalking = true;
+      document.getElementById('randomWalkBtn').textContent = 'Stop Random Walk';
+      doRandomWalkStep();
+    }
+
+    function stopRandomWalk() {
+      isRandomWalking = false;
+      document.getElementById('randomWalkBtn').textContent = 'Start Random Walk';
+      if (walkTimer) {
+        clearTimeout(walkTimer);
+        walkTimer = null;
+      }
+    }
+
+    function doRandomWalkStep() {
+      if (!isRandomWalking) return;
+
+      // Find neighbors of currentPoseBits in graphEdges
+      const neighbors = [];
+      graphEdges.forEach(e => {
+        const sourceId = e.source.id !== undefined ? e.source.id : e.source;
+        const targetId = e.target.id !== undefined ? e.target.id : e.target;
+        if (sourceId === currentPoseBits) {
+          neighbors.push(targetId);
+        } else if (targetId === currentPoseBits) {
+          neighbors.push(sourceId);
+        }
+      });
+
+      if (neighbors.length > 0) {
+        const nextId = neighbors[Math.floor(Math.random() * neighbors.length)];
+        setPoseBits(nextId);
+        handlePoseChange(nextId);
+        window.runValidate(nextId);
+      }
+
+      // Schedule next step. Wait for animation if it's slow, but 1s is usually enough.
+      walkTimer = setTimeout(doRandomWalkStep, 1000);
+    }
 
     function renderTable() {
       const tbody = document.getElementById('hingeBody');
@@ -321,6 +376,7 @@
     }
 
     window.applyTableEdits = function() {
+      stopRandomWalk();
       document.querySelectorAll('#hingeBody [data-i]').forEach(el => {
         const i = Number(el.dataset.i);
         const k = el.dataset.k;
@@ -370,6 +426,7 @@
           <option value="2">180°</option>
         `;
         select.addEventListener('change', () => {
+          stopRandomWalk();
           handlePoseChange(readPoseBits());
           window.runValidate();
         });
@@ -385,6 +442,7 @@
         updateBtnText();
 
         smartBtn.addEventListener('click', async () => {
+          stopRandomWalk();
           const currentVal = Number(select.value);
 
           if (currentVal === 0) {
@@ -569,6 +627,7 @@
           // 2 bits per hinge
           btn.textContent = `${bits.toString(4).padStart(topology.hinges.length, '0')}`;
           btn.addEventListener('click', () => {
+            stopRandomWalk();
             setPoseBits(bits);
             handlePoseChange(bits);
             window.runValidate(bits);
@@ -932,6 +991,7 @@
           });
           
           if (clickedNode) {
+            stopRandomWalk();
             setPoseBits(clickedNode.id);
             handlePoseChange(clickedNode.id);
             window.runValidate(clickedNode.id);
@@ -953,6 +1013,7 @@
           });
 
           if (clickedEdge) {
+            stopRandomWalk();
             const sourceId = clickedEdge.source.id !== undefined ? clickedEdge.source.id : clickedEdge.source;
             const targetId = clickedEdge.target.id !== undefined ? clickedEdge.target.id : clickedEdge.target;
             const tId = sourceId === currentPoseBits ? targetId : sourceId;
