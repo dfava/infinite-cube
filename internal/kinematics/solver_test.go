@@ -138,3 +138,70 @@ func collinear3(a, b, c model.Vec3) bool {
 	}
 	return cross.Distance(model.Vec3{}) <= 1e-6
 }
+
+func TestDeterministicSolverInconsistentCycle(t *testing.T) {
+	// Cube 0 --H0-- Cube 1
+	//   \           /
+	//    H1       H2
+	//     \       /
+	//      Cube 2
+	// We'll set up anchors so that it's consistent in Pose0 but inconsistent if we change one hinge.
+	top := model.Topology{
+		Cubes: []model.CubeID{0, 1, 2},
+		Hinges: []model.Hinge{
+			{
+				ID:      0,
+				A:       0,
+				B:       1,
+				AxisA:   model.AxisZ,
+				AnchorA: model.Vec3{X: 0.5, Y: 0, Z: 0},
+				AnchorB: model.Vec3{X: -0.5, Y: 0, Z: 0},
+			},
+			{
+				ID:      1,
+				A:       0,
+				B:       2,
+				AxisA:   model.AxisZ,
+				AnchorA: model.Vec3{X: 0, Y: 0.5, Z: 0},
+				AnchorB: model.Vec3{X: 0, Y: -0.5, Z: 0},
+			},
+			{
+				ID:      2,
+				A:       1,
+				B:       2,
+				AxisA:   model.AxisZ,
+				AnchorA: model.Vec3{X: -0.5, Y: 0.5, Z: 0},
+				AnchorB: model.Vec3{X: 0.5, Y: -0.5, Z: 0},
+			},
+		},
+	}
+	solver := NewDeterministicSolver()
+
+	// Pose0 should be consistent (a triangle of cubes)
+	_, err := solver.Poses(top, model.State{})
+	if err != nil {
+		t.Fatalf("expected consistent Pose0, got %v", err)
+	}
+
+	// Now make one hinge Pose180. This should break the cycle consistency.
+	state := model.State{}.ApplyMove(model.Move{Changes: []model.HingeChange{{Hinge: 0, To: model.Pose180}}})
+	_, err = solver.Poses(top, state)
+	if err == nil {
+		t.Fatalf("expected inconsistent kinematic cycle error")
+	}
+}
+
+func TestDeterministicSolverEmptyTopology(t *testing.T) {
+	solver := NewDeterministicSolver()
+	if _, err := solver.Poses(model.Topology{}, model.State{}); err == nil {
+		t.Fatalf("expected error for empty topology")
+	}
+}
+
+func TestDeterministicSolverDuplicateCubeID(t *testing.T) {
+	solver := NewDeterministicSolver()
+	top := model.Topology{Cubes: []model.CubeID{0, 0}}
+	if _, err := solver.Poses(top, model.State{}); err == nil {
+		t.Fatalf("expected error for duplicate cube ID")
+	}
+}
