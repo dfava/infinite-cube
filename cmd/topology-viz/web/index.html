@@ -22,7 +22,6 @@
           </select>
         </label>
         <button id="loadPreset">Load</button>
-        <button id="applyTable" class="secondary">Apply Table Edits</button>
       </div>
       <div id="vizContainer" style="width: 900px; height: 520px; background: #f3f4f6; border-radius: 8px; overflow: hidden; position: relative;"></div>
       <div class="muted mt-8">Red/Green/Blue = X/Y/Z hinge axis. Left-click to rotate, right-click to pan, scroll to zoom.</div>
@@ -43,10 +42,7 @@
       <ul id="issues" class="issues"></ul>
 
       <h1 style="margin-top: 14px;">State Explorer</h1>
-      <div class="muted">For `three-opposed-90`, jump through all 4 hinge states quickly.</div>
-      <div class="controls">
-        <button id="exploreBtn" class="secondary">Explore 4 States</button>
-      </div>
+      <div class="muted">Jump through all reachable states for the current configuration.</div>
       <ul id="exploreList" class="issues"></ul>
 
       <h1 style="margin-top: 14px;">Pose Debug</h1>
@@ -55,7 +51,10 @@
     </aside>
 
     <section class="card full-span">
-      <h1>Hinges</h1>
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h1>Hinges</h1>
+        <button id="applyTable" class="secondary">Apply Table Edits</button>
+      </div>
       <div class="muted">`AxisA` is X/Y/Z in cube A's local frame. `SignA` is positive rotation direction (+1/-1). `AnchorA/B` are local attachment points.</div>
       <table>
         <thead>
@@ -139,6 +138,7 @@
           renderToggles();
           renderViz();
           clearValidation();
+          window.exploreStates();
         });
     }
 
@@ -193,6 +193,7 @@
       renderToggles();
       renderViz();
       clearValidation();
+      window.exploreStates();
     }
 
     function renderToggles() {
@@ -276,37 +277,61 @@
 
     window.exploreStates = function() {
       const ul = document.getElementById('exploreList');
-      ul.innerHTML = '';
+      ul.innerHTML = '<li>Exploring...</li>';
 
-      if (document.getElementById('preset').value !== 'three-opposed-90') {
-        const li = document.createElement('li');
-        li.textContent = 'Select preset `three-opposed-90` to use this guided explorer.';
-        ul.appendChild(li);
-        return;
-      }
+      const poseBits = readPoseBits();
+      fetch('/api/enumerate', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ topology, poseBits }),
+      })
+      .then(r => r.json())
+      .then(res => {
+        ul.innerHTML = '';
+        if (res.error) {
+           const li = document.createElement('li');
+           li.textContent = `Error: ${res.error}`;
+           ul.appendChild(li);
+           return;
+        }
+        if (!res.states || res.states.length === 0) {
+           const li = document.createElement('li');
+           li.textContent = 'No reachable states found.';
+           ul.appendChild(li);
+           return;
+        }
 
-      const states = [
-        { bits: 0b00, label: 'both disengaged -> line' },
-        { bits: 0b01, label: 'hinge H0 engaged -> L-shape' },
-        { bits: 0b10, label: 'hinge H1 engaged -> L-shape' },
-        { bits: 0b11, label: 'both engaged -> line (rotated from initial)' },
-      ];
-      states.forEach((s) => {
-        const li = document.createElement('li');
-        const btn = document.createElement('button');
-        btn.className = 'secondary';
-        btn.textContent = `${s.bits.toString(2).padStart(2, '0')}`;
-        btn.addEventListener('click', () => {
-          setPoseBits(s.bits);
-          renderViz();
-          runValidate();
+        // Limit display if there are too many states
+        const maxDisplay = 100;
+        const toDisplay = res.states.slice(0, maxDisplay);
+
+        toDisplay.forEach((bits) => {
+          const li = document.createElement('li');
+          const btn = document.createElement('button');
+          btn.className = 'secondary';
+          btn.textContent = `${bits.toString(2).padStart(topology.hinges.length, '0')}`;
+          btn.addEventListener('click', () => {
+            setPoseBits(bits);
+            renderViz();
+            runValidate();
+          });
+          li.appendChild(btn);
+          const span = document.createElement('span');
+          span.style.marginLeft = '8px';
+          span.textContent = `PoseBits: ${bits}`;
+          li.appendChild(span);
+          ul.appendChild(li);
         });
-        li.appendChild(btn);
-        const span = document.createElement('span');
-        span.style.marginLeft = '8px';
-        span.textContent = s.label;
-        li.appendChild(span);
-        ul.appendChild(li);
+
+        if (res.states.length > maxDisplay) {
+           const li = document.createElement('li');
+           li.className = 'muted';
+           li.textContent = `... and ${res.states.length - maxDisplay} more states.`;
+           ul.appendChild(li);
+        }
+      })
+      .catch(err => {
+        ul.innerHTML = `<li>Fetch error: ${err}</li>`;
       });
     }
 
@@ -418,7 +443,6 @@
     document.getElementById('loadPreset').addEventListener('click', window.loadPreset);
     document.getElementById('applyTable').addEventListener('click', window.applyTableEdits);
     document.getElementById('validateBtn').addEventListener('click', window.runValidate);
-    document.getElementById('exploreBtn').addEventListener('click', window.exploreStates);
 
     window.loadPreset();
   </script>

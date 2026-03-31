@@ -4,14 +4,15 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
-	"log"
-	"net/http"
-	"strconv"
-
+	"infinite-cube/internal/fsm"
 	"infinite-cube/internal/kinematics"
 	"infinite-cube/internal/model"
 	"infinite-cube/internal/topology"
 	"infinite-cube/internal/validate"
+	"log"
+	"net/http"
+	"sort"
+	"strconv"
 )
 
 //go:embed web/*
@@ -81,6 +82,7 @@ func main() {
 	mux.HandleFunc("/api/topology", handleTopology)
 	mux.HandleFunc("/api/validate", handleValidate)
 	mux.HandleFunc("/api/poses", handlePoses)
+	mux.HandleFunc("/api/enumerate", handleEnumerate)
 	mux.Handle("/", http.FileServer(http.FS(webFS)))
 
 	addr := ":8080"
@@ -145,6 +147,46 @@ func handleValidate(w http.ResponseWriter, r *http.Request) {
 		PoseBitsBin: strconv.FormatUint(uint64(req.PoseBits), 2),
 	}
 	writeJSON(w, resp)
+}
+
+type enumerateResponse struct {
+	States []uint16 `json:"states"`
+}
+
+func handleEnumerate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSONWithStatus(w, http.StatusMethodNotAllowed, apiError{Error: "method not allowed"})
+		return
+	}
+
+	var req validateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONWithStatus(w, http.StatusBadRequest, apiError{Error: "invalid json"})
+		return
+	}
+
+	top, err := fromTopologyJSON(req.Topology)
+	if err != nil {
+		writeJSONWithStatus(w, http.StatusBadRequest, apiError{Error: err.Error()})
+		return
+	}
+
+	start := model.State{PoseBits: req.PoseBits}
+	validator := validate.StructuralValidator{}
+
+	graph := fsm.Enumerate(top, start, validator)
+
+	states := make([]uint16, 0, len(graph.Nodes))
+	for s := range graph.Nodes {
+		states = append(states, s.PoseBits)
+	}
+
+	// Sort states for deterministic output
+	sort.Slice(states, func(i, j int) bool {
+		return states[i] < states[j]
+	})
+
+	writeJSON(w, enumerateResponse{States: states})
 }
 
 func handlePoses(w http.ResponseWriter, r *http.Request) {
