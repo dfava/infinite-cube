@@ -273,7 +273,7 @@
       });
       setPoseBits(initialBits);
       handlePoseChange(initialBits);
-      window.runValidate();
+      window.runValidate(initialBits);
     });
 
     function renderTable() {
@@ -455,20 +455,33 @@
         const id = Number(sel.dataset.hingeId);
         const val = (bits >> (2 * id)) & 0x3;
         sel.value = String(val);
-        // Trigger change event to update smart button text
-        sel.dispatchEvent(new Event('change'));
+        // Update the smart button text manually to avoid redundant 'change' event logic
+        const smartBtn = sel.nextElementSibling;
+        if (smartBtn && smartBtn.tagName === 'BUTTON') {
+          smartBtn.textContent = sel.value === "0" ? 'Smart Activate' : 'Smart De-activate';
+        }
       });
     }
 
-    window.runValidate = function() {
-      const poseBits = readPoseBits();
+    let currentValidateBits = -1;
+
+    window.runValidate = function(poseBits) {
+      if (poseBits === undefined) {
+        poseBits = readPoseBits();
+      }
+      currentValidateBits = poseBits;
       fetch('/api/validate', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({ topology, poseBits }),
       })
       .then(r => r.json())
-      .then(showValidation);
+      .then(res => {
+        // Only show if this is still the most recent validation request
+        if (currentValidateBits === res.poseBits) {
+          showValidation(res);
+        }
+      });
     }
 
     function showValidation(res) {
@@ -550,7 +563,7 @@
           btn.addEventListener('click', () => {
             setPoseBits(bits);
             handlePoseChange(bits);
-            window.runValidate();
+            window.runValidate(bits);
           });
           wrap.appendChild(btn);
           const span = document.createElement('span');
@@ -913,7 +926,7 @@
           if (clickedNode) {
             setPoseBits(clickedNode.id);
             handlePoseChange(clickedNode.id);
-            window.runValidate();
+            window.runValidate(clickedNode.id);
             return;
           }
 
@@ -937,7 +950,7 @@
             const tId = sourceId === currentPoseBits ? targetId : sourceId;
             setPoseBits(tId);
             handlePoseChange(tId);
-            window.runValidate();
+            window.runValidate(tId);
           }
         }
       };
