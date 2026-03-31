@@ -8,7 +8,7 @@
 </head>
 <body>
   <div class="wrap">
-    <section class="card">
+    <section class="card viz-col">
       <h1>Topology Visualizer</h1>
       <div class="muted">Edit hinges, inspect cube bodies, and validate state bits against the Go validator.</div>
       <div class="controls">
@@ -23,31 +23,13 @@
         </label>
         <button id="resetPose" class="secondary">Reset to Initial Pose</button>
       </div>
-      <div id="vizContainer" style="width: 900px; height: 520px; background: #f3f4f6; border-radius: 8px; overflow: hidden; position: relative;"></div>
+      <div id="vizContainer"></div>
       <div class="muted mt-8">Red/Green/Blue = X/Y/Z hinge axis. Left-click to rotate, right-click to pan, scroll to zoom.</div>
       <div id="vizLegend" class="muted mt-6"></div>
       <div id="poseStatus" class="muted mt-6"></div>
     </section>
 
-    <aside class="card">
-      <h1>Validator</h1>
-      <div class="muted">`StructuralValidator` + diagnostics from `AnalyzeState`.</div>
-
-      <div id="hingeToggles" class="hinge-toggles"></div>
-      <div id="status" class="status">No run yet.</div>
-      <div id="meta" class="muted mt-8"></div>
-      <ul id="issues" class="issues"></ul>
-
-      <h1 style="margin-top: 14px;">State Explorer</h1>
-      <div class="muted">Jump through all reachable states for the current configuration.</div>
-      <ul id="exploreList" class="issues"></ul>
-
-      <h1 style="margin-top: 14px;">Pose Debug</h1>
-      <div class="muted">Cube transforms from `/api/poses` for current state.</div>
-      <pre id="posePanel" style="white-space: pre-wrap; font-size: 12px; line-height: 1.35;"></pre>
-    </aside>
-
-    <section class="card full-span">
+    <section class="card hinge-col">
       <div style="display: flex; justify-content: space-between; align-items: center;">
         <h1>Hinges</h1>
         <button id="applyTable" class="secondary">Apply Table Edits</button>
@@ -62,6 +44,26 @@
         <tbody id="hingeBody"></tbody>
       </table>
     </section>
+
+    <aside class="card validator-col">
+      <h1>Validator</h1>
+      <div class="muted">`StructuralValidator` + diagnostics from `AnalyzeState`.</div>
+
+      <div id="hingeToggles" class="hinge-toggles"></div>
+      <div id="status" class="status">No run yet.</div>
+      <div id="meta" class="muted mt-8"></div>
+      <ul id="issues" class="issues"></ul>
+
+      <h1 style="margin-top: 14px;">Pose Debug</h1>
+      <div class="muted">Cube transforms from `/api/poses` for current state.</div>
+      <pre id="posePanel" style="white-space: pre-wrap; font-size: 12px; line-height: 1.35;"></pre>
+    </aside>
+
+    <aside class="card explorer-col">
+      <h1>State Explorer</h1>
+      <div class="muted">Jump through all reachable states for the current configuration.</div>
+      <div id="exploreList" style="margin-top: 8px;"></div>
+    </aside>
   </div>
 
   <script type="importmap">
@@ -86,8 +88,17 @@
     camera.lookAt(0, 0, 0);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(900, 520);
-    document.getElementById('vizContainer').appendChild(renderer.domElement);
+    const container = document.getElementById('vizContainer');
+    renderer.setSize(container.clientWidth || 900, container.clientHeight || 520);
+    container.appendChild(renderer.domElement);
+
+    window.addEventListener('resize', () => {
+      const w = container.clientWidth;
+      const h = container.clientHeight;
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+    });
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
@@ -454,8 +465,8 @@
     }
 
     window.exploreStates = function() {
-      const ul = document.getElementById('exploreList');
-      ul.innerHTML = '<li>Exploring...</li>';
+      const box = document.getElementById('exploreList');
+      box.innerHTML = '<div class="muted">Exploring...</div>';
 
       const poseBits = readPoseBits();
       fetch('/api/enumerate', {
@@ -465,17 +476,19 @@
       })
       .then(r => r.json())
       .then(res => {
-        ul.innerHTML = '';
+        box.innerHTML = '';
         if (res.error) {
-           const li = document.createElement('li');
-           li.textContent = `Error: ${res.error}`;
-           ul.appendChild(li);
+           const div = document.createElement('div');
+           div.className = 'bad';
+           div.textContent = `Error: ${res.error}`;
+           box.appendChild(div);
            return;
         }
         if (!res.states || res.states.length === 0) {
-           const li = document.createElement('li');
-           li.textContent = 'No reachable states found.';
-           ul.appendChild(li);
+           const div = document.createElement('div');
+           div.className = 'muted';
+           div.textContent = 'No reachable states found.';
+           box.appendChild(div);
            return;
         }
 
@@ -484,9 +497,16 @@
         const toDisplay = res.states.slice(0, maxDisplay);
 
         toDisplay.forEach((bits) => {
-          const li = document.createElement('li');
+          const wrap = document.createElement('div');
+          wrap.style.display = 'flex';
+          wrap.style.alignItems = 'center';
+          wrap.style.gap = '8px';
+          wrap.style.marginBottom = '4px';
+
           const btn = document.createElement('button');
           btn.className = 'secondary';
+          btn.style.fontSize = '11px';
+          btn.style.padding = '2px 6px';
           // 2 bits per hinge
           btn.textContent = `${bits.toString(4).padStart(topology.hinges.length, '0')}`;
           btn.addEventListener('click', () => {
@@ -494,23 +514,24 @@
             handlePoseChange(bits);
             runValidate();
           });
-          li.appendChild(btn);
+          wrap.appendChild(btn);
           const span = document.createElement('span');
-          span.style.marginLeft = '8px';
+          span.className = 'muted';
+          span.style.fontSize = '11px';
           span.textContent = `PoseBits: ${bits}`;
-          li.appendChild(span);
-          ul.appendChild(li);
+          wrap.appendChild(span);
+          box.appendChild(wrap);
         });
 
         if (res.states.length > maxDisplay) {
-           const li = document.createElement('li');
-           li.className = 'muted';
-           li.textContent = `... and ${res.states.length - maxDisplay} more states.`;
-           ul.appendChild(li);
+           const div = document.createElement('div');
+           div.className = 'muted';
+           div.textContent = `... and ${res.states.length - maxDisplay} more states.`;
+           box.appendChild(div);
         }
       })
       .catch(err => {
-        ul.innerHTML = `<li>Fetch error: ${err}</li>`;
+        box.innerHTML = `<div class="bad">Fetch error: ${err}</div>`;
       });
     }
 
