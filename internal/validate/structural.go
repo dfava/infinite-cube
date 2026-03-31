@@ -157,7 +157,9 @@ func AnalyzeState(top model.Topology, s model.State) DiagnosticReport {
 	if len(issues) == 0 {
 		solver := kinematics.NewDeterministicSolver()
 		poses, err := solver.Poses(top, s)
-		if err == nil {
+		if err != nil {
+			issues = append(issues, fmt.Sprintf("kinematic error: %v", err))
+		} else {
 			// Check for cube overlaps. Since each cube is a unit cube centered at Pose.P,
 			// two cubes collide if the distance between their centers is less than 1.0.
 			// However, adjacent cubes connected by a hinge share a face, so their distance is exactly 1.0.

@@ -169,3 +169,21 @@ func TestHingeAlignment(t *testing.T) {
 		})
 	}
 }
+
+func TestAnalyzeStateKinematicError(t *testing.T) {
+	// A topology with a cycle that might be inconsistent
+	top := model.Topology{
+		Cubes: []model.CubeID{0, 1, 2},
+		Hinges: []model.Hinge{
+			{ID: 0, A: 0, B: 1, AxisA: model.AxisX, AnchorA: model.Vec3{X: 0, Y: 0.5, Z: 0.5}, AnchorB: model.Vec3{X: 0, Y: -0.5, Z: 0.5}},
+			{ID: 1, A: 1, B: 2, AxisA: model.AxisX, AnchorA: model.Vec3{X: 0, Y: 0.5, Z: 0.5}, AnchorB: model.Vec3{X: 0, Y: -0.5, Z: 0.5}},
+			// Closing a cycle incorrectly
+			{ID: 2, A: 2, B: 0, AxisA: model.AxisY, AnchorA: model.Vec3{X: 0.5, Y: 0, Z: 0.5}, AnchorB: model.Vec3{X: -0.5, Y: 0, Z: 0.5}},
+		},
+	}
+	s := model.State{}
+	report := AnalyzeState(top, s)
+	if len(report.Issues) == 0 {
+		t.Fatalf("expected issues for inconsistent kinematic cycle")
+	}
+}
