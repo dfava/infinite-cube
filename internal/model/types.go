@@ -38,10 +38,15 @@ type Topology struct {
 	Hinges []Hinge
 }
 
-// Move represents one hinge move.
-type Move struct {
+// HingeChange represents a change to a single hinge.
+type HingeChange struct {
 	Hinge HingeID
 	To    HingePose
+}
+
+// Move represents one or more simultaneous hinge moves.
+type Move struct {
+	Changes []HingeChange
 }
 
 // Transition is a directed edge in the FSM graph.

@@ -43,7 +43,7 @@ func TestDeterministicSolverSimplePose0(t *testing.T) {
 func TestDeterministicSolverSimplePose180FlipsOrientation(t *testing.T) {
 	top := topology.TwoCubeHinge()
 	solver := NewDeterministicSolver()
-	state := model.State{}.ApplyMove(model.Move{Hinge: 0, To: model.Pose180})
+	state := model.State{}.ApplyMove(model.Move{Changes: []model.HingeChange{{Hinge: 0, To: model.Pose180}}})
 
 	poses, err := solver.Poses(top, state)
 	if err != nil {

@@ -20,14 +20,21 @@ func (StructuralValidator) ValidTransition(top model.Topology, from model.State,
 	if !(StructuralValidator{}).ValidState(top, from) || !(StructuralValidator{}).ValidState(top, to) {
 		return false
 	}
-	if !hasHinge(top, mv.Hinge) {
-		return false
+	for _, c := range mv.Changes {
+		if !hasHinge(top, c.Hinge) {
+			return false
+		}
 	}
 	expected := from.ApplyMove(mv)
 	if expected != to {
 		return false
 	}
-	return to.Pose(mv.Hinge) == mv.To
+	for _, c := range mv.Changes {
+		if to.Pose(c.Hinge) != c.To {
+			return false
+		}
+	}
+	return true
 }
 
 // DiagnosticReport provides human-readable validation feedback.

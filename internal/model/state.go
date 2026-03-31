@@ -15,14 +15,16 @@ func (s State) Pose(h HingeID) HingePose {
 
 // ApplyMove returns a new state with the move applied.
 func (s State) ApplyMove(m Move) State {
-	shift := 2 * m.Hinge
-	mask := uint32(0x3) << shift
-	s.PoseBits = (s.PoseBits &^ mask) | (uint32(m.To) << shift)
+	for _, c := range m.Changes {
+		shift := 2 * c.Hinge
+		mask := uint32(0x3) << shift
+		s.PoseBits = (s.PoseBits &^ mask) | (uint32(c.To) << shift)
+	}
 	return s
 }
 
-// Flip cycles through Pose0 -> Pose90 -> Pose180 -> Pose0.
-func (s State) Flip(h HingeID) State {
+// Flip returns a move that cycles through Pose0 -> Pose90 -> Pose180 -> Pose0 for a single hinge.
+func (s State) Flip(h HingeID) Move {
 	cur := s.Pose(h)
 	var next HingePose
 	switch cur {
@@ -33,7 +35,7 @@ func (s State) Flip(h HingeID) State {
 	default:
 		next = Pose0
 	}
-	return s.ApplyMove(Move{Hinge: h, To: next})
+	return Move{Changes: []HingeChange{{Hinge: h, To: next}}}
 }
 
 func (s State) String() string {
