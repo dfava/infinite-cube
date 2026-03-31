@@ -17,9 +17,9 @@ func ThreeCubeOpposed90() model.Topology {
 			B:       1,
 			AxisA:   model.AxisZ,
 			SignA:   1,
-			AngleB:  math.Pi / 2,
-			AnchorA: model.Vec3{X: 0.5, Y: 0, Z: 0},
-			AnchorB: model.Vec3{X: -0.5, Y: 0, Z: 0},
+			AngleB:  math.Pi,
+			AnchorA: model.Vec3{X: 0.5, Y: 0.5, Z: 0},
+			AnchorB: model.Vec3{X: -0.5, Y: 0.5, Z: 0},
 		},
 		{
 			ID:      1,
@@ -27,9 +27,9 @@ func ThreeCubeOpposed90() model.Topology {
 			B:       2,
 			AxisA:   model.AxisZ,
 			SignA:   -1,
-			AngleB:  math.Pi / 2,
-			AnchorA: model.Vec3{X: 0.5, Y: 0, Z: 0},
-			AnchorB: model.Vec3{X: -0.5, Y: 0, Z: 0},
+			AngleB:  math.Pi,
+			AnchorA: model.Vec3{X: 0.5, Y: -0.5, Z: 0},
+			AnchorB: model.Vec3{X: -0.5, Y: -0.5, Z: 0},
 		},
 	}
 	return model.Topology{Cubes: cubes, Hinges: hinges}

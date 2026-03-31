@@ -102,6 +102,8 @@ func handleTopology(w http.ResponseWriter, r *http.Request) {
 		top = topology.TwoCubeHinge()
 	case "three-opposed-90":
 		top = topology.ThreeCubeOpposed90()
+	case "infinite-cube-8":
+		top = topology.InfiniteCube8()
 	default:
 		http.Error(w, "unknown preset", http.StatusBadRequest)
 		return
