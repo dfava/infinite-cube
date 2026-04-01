@@ -671,7 +671,8 @@
     }
 
     function calculateIntermediate(oldBits, newBits) {
-      // For each hinge, if transitioning between PoseA(0) and PoseB(1), pass through PoseC(2).
+      // For each hinge, if transitioning between Pose0(0) and Pose180(2), pass through Pose90(1).
+      // Note: HingePose values are Pose0=0, Pose90=1, Pose180=2.
       let intermediate = oldBits;
       let needed = false;
 
@@ -680,10 +681,10 @@
         const oldPose = (oldBits >> (2 * id)) & 0x3;
         const newPose = (newBits >> (2 * id)) & 0x3;
 
-        // If flipping 0 <-> 1, inject 2 in between
-        if ((oldPose === 0 && newPose === 1) || (oldPose === 1 && newPose === 0)) {
+        // If flipping 0 <-> 2, inject 1 (Pose90) in between
+        if ((oldPose === 0 && newPose === 2) || (oldPose === 2 && newPose === 0)) {
           const mask = 0x3 << (2 * id);
-          intermediate = (intermediate & ~mask) | (2 << (2 * id));
+          intermediate = (intermediate & ~mask) | (1 << (2 * id));
           needed = true;
         }
       }
