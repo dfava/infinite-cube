@@ -70,12 +70,14 @@ func AnalyzeTopology(top model.Topology) DiagnosticReport {
 	}
 
 	hingeIDs := make(map[model.HingeID]struct{}, len(top.Hinges))
-	pairs := make(map[[2]model.CubeID]model.HingeID, len(top.Hinges))
+	processedHinges := make(map[model.HingeID]model.Hinge, len(top.Hinges))
+	pairs := make(map[[2]model.CubeID][]model.HingeID, len(top.Hinges))
 	for _, h := range top.Hinges {
 		if _, exists := hingeIDs[h.ID]; exists {
 			issues = append(issues, fmt.Sprintf("hinge ID %d appears more than once", h.ID))
 		} else {
 			hingeIDs[h.ID] = struct{}{}
+			processedHinges[h.ID] = h
 		}
 		if h.ID >= 16 {
 			issues = append(issues, fmt.Sprintf("hinge ID %d exceeds PoseBits capacity (max 15)", h.ID))
@@ -109,10 +111,16 @@ func AnalyzeTopology(top model.Topology) DiagnosticReport {
 		}
 
 		p := canonicalPair(h.A, h.B)
-		if prev, exists := pairs[p]; exists {
-			issues = append(issues, fmt.Sprintf("hinge %d duplicates cube pair (%d,%d) already used by hinge %d", h.ID, p[0], p[1], prev))
+		if prevHingeIDs, exists := pairs[p]; exists {
+			for _, prevID := range prevHingeIDs {
+				prev := processedHinges[prevID]
+				if h.AxisA == prev.AxisA && h.AnchorA.AlmostEqual(prev.AnchorA, 1e-6) && h.AnchorB.AlmostEqual(prev.AnchorB, 1e-6) {
+					issues = append(issues, fmt.Sprintf("hinge %d duplicates cube pair (%d,%d) already used by hinge %d with same axis and anchors", h.ID, p[0], p[1], prev.ID))
+				}
+			}
+			pairs[p] = append(pairs[p], h.ID)
 		} else {
-			pairs[p] = h.ID
+			pairs[p] = []model.HingeID{h.ID}
 		}
 
 		// Edge-alignment checks

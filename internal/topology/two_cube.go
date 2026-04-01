@@ -42,3 +42,28 @@ func TwoCubeHingeThrough() model.Topology {
 	}
 	return model.Topology{Cubes: cubes, Hinges: hinges}
 }
+
+func TwoCubeBrokenHinge() model.Topology {
+	cubes := []model.CubeID{0, 1}
+	hinges := []model.Hinge{
+		{
+			ID:      0,
+			A:       0,
+			B:       1,
+			AxisA:   model.AxisZ,
+			SignA:   1,
+			AnchorA: model.Vec3{X: 0.5, Y: 0.5, Z: 0},
+			AnchorB: model.Vec3{X: -0.5, Y: 0.5, Z: 0},
+		},
+		{
+			ID:      1,
+			A:       0,
+			B:       1,
+			AxisA:   model.AxisY,
+			SignA:   1,
+			AnchorA: model.Vec3{X: 0.5, Y: 0, Z: 0.5},
+			AnchorB: model.Vec3{X: -0.5, Y: 0, Z: 0.5},
+		},
+	}
+	return model.Topology{Cubes: cubes, Hinges: hinges}
+}

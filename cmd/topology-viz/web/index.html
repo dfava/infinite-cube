@@ -16,6 +16,7 @@
           <select id="preset">
             <option value="two-cube-hinge">two-cube-hinge</option>
             <option value="two-cube-hinge-through">two-cube-hinge-through</option>
+            <option value="two-cube-broken-hinge">two-cube-broken-hinge</option>
             <option value="three-cube-line">three-cube-line</option>
             <option value="three-opposed-90">three-opposed-90</option>
             <option value="three-cube-z">three-cube-z</option>
@@ -54,7 +55,7 @@
     <aside class="card transition-graph-col">
       <h1>Transition Diagram</h1>
       <div class="muted"><span id="graphNodeCount">0</span> nodes, <span id="graphEdgeCount">0</span> edges. Nodes are states, edges are valid moves.</div>
-      <div id="transitionGraph" style="margin-top: 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; overflow: hidden; height: 300px; position: relative;">
+      <div id="transitionGraph" style="margin-top: 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; overflow: hidden; height: 450px; position: relative;">
         <canvas id="graphCanvas"></canvas>
       </div>
     </aside>
@@ -847,20 +848,63 @@
         };
       });
 
-      graphEdges = (transitions || []).map(t => ({
-        source: t.from,
-        target: t.to
-      }));
+      graphEdges = (transitions || []).map(t => {
+        const diff = t.from ^ t.to;
+        // Identify which hinge changed (e.g., hinge K)
+        // Each hinge uses 2 bits.
+        let hingeId = -1;
+        for (let i = 0; i < 16; i++) {
+          if ((diff >> (2 * i)) & 0x3) {
+            hingeId = i;
+            break;
+          }
+        }
+        return {
+          source: t.from,
+          target: t.to,
+          hingeId: hingeId
+        };
+      });
 
       if (simulation) simulation.stop();
 
+      const totalHinges = topology.hinges.length || 1;
+
       simulation = d3.forceSimulation(graphNodes)
-        .force("link", d3.forceLink(graphEdges).id(d => d.id).distance(60))
-        .force("charge", d3.forceManyBody().strength(-300)) // Even stronger repulsion
+        .force("link", d3.forceLink(graphEdges).id(d => d.id).distance(50))
+        .force("charge", d3.forceManyBody().strength(-200))
         .force("center", d3.forceCenter(width / 2, height / 2))
-        .force("collision", d3.forceCollide().radius(35)) // Larger collision radius
-        .force("x", d3.forceX(width / 2).strength(0.1))
-        .force("y", d3.forceY(height / 2).strength(0.1))
+        .force("collision", d3.forceCollide().radius(25))
+        .force("hingeAlign", (alpha) => {
+          const strength = 0.5 * alpha;
+          graphEdges.forEach(edge => {
+            if (edge.hingeId === -1) return;
+            // Each hinge gets a unique angle
+            const angle = (edge.hingeId * Math.PI) / totalHinges;
+            const targetDx = Math.cos(angle) * 50;
+            const targetDy = Math.sin(angle) * 50;
+            
+            const dx = edge.target.x - edge.source.x;
+            const dy = edge.target.y - edge.source.y;
+            
+            // We want (dx, dy) to align with (targetDx, targetDy) or its opposite
+            const dot = dx * targetDx + dy * targetDy;
+            const factor = dot < 0 ? -1 : 1;
+            
+            const desiredX = edge.source.x + factor * targetDx;
+            const desiredY = edge.source.y + factor * targetDy;
+            
+            const vx = (desiredX - edge.target.x) * strength;
+            const vy = (desiredY - edge.target.y) * strength;
+            
+            edge.target.vx += vx;
+            edge.target.vy += vy;
+            edge.source.vx -= vx;
+            edge.source.vy -= vy;
+          });
+        })
+        .force("x", d3.forceX(width / 2).strength(0.05))
+        .force("y", d3.forceY(height / 2).strength(0.05))
         .on("tick", drawGraph);
 
       // Initialize dragging
@@ -919,8 +963,15 @@
         const sourceId = e.source.id !== undefined ? e.source.id : e.source;
         const targetId = e.target.id !== undefined ? e.target.id : e.target;
         const isAdjacent = sourceId === currentPoseBits || targetId === currentPoseBits;
-        ctx.strokeStyle = isAdjacent ? accentColor : lineColor;
-        ctx.lineWidth = isAdjacent ? 2 : 1;
+        
+        // Edge color based on hingeId (stable colors)
+        const colors = ['#e11d48', '#2563eb', '#059669', '#d97706', '#7c3aed', '#db2777', '#4f46e5', '#ca8a04'];
+        const hingeColor = e.hingeId !== -1 ? colors[e.hingeId % colors.length] : lineColor;
+
+        ctx.strokeStyle = isAdjacent ? accentColor : hingeColor;
+        ctx.lineWidth = isAdjacent ? 3 : 1.5;
+        if (!isAdjacent) ctx.globalAlpha = 0.4;
+        
         ctx.beginPath();
         const src = e.source.id !== undefined ? e.source : graphNodes.find(n => n.id === e.source);
         const tgt = e.target.id !== undefined ? e.target : graphNodes.find(n => n.id === e.target);
@@ -929,6 +980,7 @@
           ctx.lineTo(tgt.x, tgt.y);
           ctx.stroke();
         }
+        ctx.globalAlpha = 1.0;
       });
       
       // Draw nodes

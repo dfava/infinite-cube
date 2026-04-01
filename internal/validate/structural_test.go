@@ -51,6 +51,11 @@ func TestAnalyzeTopology(t *testing.T) {
 			hasIssue: false,
 		},
 		{
+			name:     "Two Cube with Two Valid Hinges",
+			top:      topology.TwoCubeBrokenHinge(),
+			hasIssue: false,
+		},
+		{
 			name: "Duplicate Cube ID",
 			top: model.Topology{
 				Cubes: []model.CubeID{0, 0},
@@ -89,12 +94,23 @@ func TestAnalyzeTopology(t *testing.T) {
 			hasIssue: true,
 		},
 		{
-			name: "Multiple Hinges Same Pair",
+			name: "Multiple Hinges Same Pair (Valid)",
 			top: model.Topology{
 				Cubes: []model.CubeID{0, 1},
 				Hinges: []model.Hinge{
-					{ID: 0, A: 0, B: 1, AxisA: model.AxisX, AnchorA: model.Vec3{X: 0, Y: 0.5, Z: 0.5}, AnchorB: model.Vec3{X: 0, Y: -0.5, Z: 0.5}},
-					{ID: 1, A: 0, B: 1, AxisA: model.AxisY, AnchorA: model.Vec3{X: 0.5, Y: 0, Z: 0.5}, AnchorB: model.Vec3{X: -0.5, Y: 0, Z: 0.5}},
+					{ID: 0, A: 0, B: 1, AxisA: model.AxisX, AnchorA: model.Vec3{X: 0, Y: 0.5, Z: 0.5}, AnchorB: model.Vec3{X: 0, Y: -0.5, Z: 0.5}, SignA: 1},
+					{ID: 1, A: 0, B: 1, AxisA: model.AxisY, AnchorA: model.Vec3{X: 0.5, Y: 0, Z: 0.5}, AnchorB: model.Vec3{X: -0.5, Y: 0, Z: 0.5}, SignA: 1},
+				},
+			},
+			hasIssue: false,
+		},
+		{
+			name: "Multiple Hinges Same Pair (Truly Duplicate)",
+			top: model.Topology{
+				Cubes: []model.CubeID{0, 1},
+				Hinges: []model.Hinge{
+					{ID: 0, A: 0, B: 1, AxisA: model.AxisX, AnchorA: model.Vec3{X: 0, Y: 0.5, Z: 0.5}, AnchorB: model.Vec3{X: 0, Y: -0.5, Z: 0.5}, SignA: 1},
+					{ID: 1, A: 0, B: 1, AxisA: model.AxisX, AnchorA: model.Vec3{X: 0, Y: 0.5, Z: 0.5}, AnchorB: model.Vec3{X: 0, Y: -0.5, Z: 0.5}, SignA: 1},
 				},
 			},
 			hasIssue: true,
