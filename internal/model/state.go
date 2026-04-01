@@ -23,7 +23,7 @@ func (s State) ApplyMove(m Move) State {
 	return s
 }
 
-// Flip returns a move that cycles through Pose0 -> Pose90 -> Pose180 -> Pose0 for a single hinge.
+// Flip returns a move that cycles through Pose0 -> Pose90 -> Pose180 -> Pose90 -> Pose0 for a single hinge.
 func (s State) Flip(h HingeID) Move {
 	cur := s.Pose(h)
 	var next HingePose
@@ -31,7 +31,13 @@ func (s State) Flip(h HingeID) Move {
 	case Pose0:
 		next = Pose90
 	case Pose90:
+		// We could go to 0 or 180. Flip is often used in interactive contexts
+		// where we cycle forward. Let's cycle forward: 0 -> 90 -> 180 -> 0.
+		// Actually, to be strictly 90-degree adjacent, we should go to 180.
 		next = Pose180
+	case Pose180:
+		// Go back to 90
+		next = Pose90
 	default:
 		next = Pose0
 	}

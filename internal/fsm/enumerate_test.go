@@ -25,16 +25,58 @@ func TestEnumerateHypercubeCountWithPermissiveValidator(t *testing.T) {
 
 	g := Enumerate(top, start, v)
 
-	wantNodes := 1 << len(top.Hinges)
+	// wantNodes := wantNodes * len(top.Hinges)
+	// Each hinge can be in 3 poses: 0, 90, 180.
+	// With PermissiveValidator, all combinations are reachable since we can go 0 <-> 90 <-> 180.
+	wantNodes := 1
+	for range len(top.Hinges) {
+		wantNodes *= 3
+	}
 	if len(g.Nodes) != wantNodes {
 		t.Fatalf("expected %d nodes, got %d", wantNodes, len(g.Nodes))
 	}
 
-	// wantEdges := wantNodes * len(top.Hinges)
-	// With pairs added: each node has len(top.Hinges) single moves
-	// AND (len(top.Hinges) choose 2) pair moves.
+	// Each node has moves to adjacent poses.
+	// If a hinge is at 0 or 180, it has 1 adjacent pose (90).
+	// If a hinge is at 90, it has 2 adjacent poses (0 and 180).
+	// Total single edges = Sum over all states of (number of hinges at 90 * 2 + number of hinges at 0/180 * 1)
+
+	// For one hinge:
+	// States: 0, 90, 180
+	// Edges: 0->90, 180->90, 90->0, 90->180 (Total 4)
+
+	// For N hinges:
+	// Number of single-move edges = N * 4 * 3^(N-1)
 	n := len(top.Hinges)
-	wantEdges := wantNodes * (n + n*(n-1)/2)
+	wantSingleEdges := n * 4
+	for i := 0; i < n-1; i++ {
+		wantSingleEdges *= 3
+	}
+
+	// For simultaneous moves of 2 hinges:
+	// A pair of hinges (h1, h2) has moves to (adj1 x adj2).
+	// If h1 is at 0, adj1={90} (size 1)
+	// If h1 is at 90, adj1={0, 180} (size 2)
+	// If h1 is at 180, adj1={90} (size 1)
+	// Total edges for one pair:
+	// (h1,h2) state: (0,0)->(90,90) [1 edge]
+	// (0,90)->(90,0), (90,180) [2 edges]
+	// (0,180)->(90,90) [1 edge]
+	// (90,0)->(0,90), (180,90) [2 edges]
+	// (90,90)->(0,0), (0,180), (180,0), (180,180) [4 edges]
+	// (90,180)->(0,90), (180,90) [2 edges]
+	// (180,0)->(90,90) [1 edge]
+	// (180,90)->(90,0), (90,180) [2 edges]
+	// (180,180)->(90,90) [1 edge]
+	// Total edges for one pair across all 9 states = 1+2+1+2+4+2+1+2+1 = 16
+
+	// Total simultaneous edges for N hinges = (N choose 2) * 16 * 3^(N-2)
+	wantPairEdges := (n * (n - 1) / 2) * 16
+	for i := 0; i < n-2; i++ {
+		wantPairEdges *= 3
+	}
+
+	wantEdges := wantSingleEdges + wantPairEdges
 	gotEdges := 0
 	for _, out := range g.Edges {
 		gotEdges += len(out)
@@ -98,5 +140,27 @@ func TestEnumerateInvalidStart(t *testing.T) {
 	g := Enumerate(top, start, v)
 	if len(g.Nodes) != 0 {
 		t.Fatalf("expected 0 nodes for invalid start state")
+	}
+}
+
+func TestTwoCubeHingeThroughReachability(t *testing.T) {
+	// TwoCubeHingeThrough() is designed so that Pose0 and Pose180 are collision-free,
+	// but Pose90 (the mandatory intermediate state) has a collision.
+	// Therefore, Pose180 should be unreachable from Pose0.
+	top := topology.TwoCubeHingeThrough()
+	start := model.State{} // Pose0 for all hinges
+	v := validate.StructuralValidator{}
+
+	g := Enumerate(top, start, v)
+
+	// Only the initial Pose0 state should be reachable.
+	if len(g.Nodes) != 1 {
+		t.Errorf("expected 1 reachable node, got %d", len(g.Nodes))
+	}
+
+	for node := range g.Nodes {
+		if node.Pose(0) != model.Pose0 {
+			t.Errorf("expected only Pose0 to be reachable, but found %v", node.Pose(0))
+		}
 	}
 }

@@ -112,6 +112,8 @@ func handleTopology(w http.ResponseWriter, r *http.Request) {
 	switch preset {
 	case "two-cube-hinge":
 		top = topology.TwoCubeHinge()
+	case "two-cube-hinge-through":
+		top = topology.TwoCubeHingeThrough()
 	case "three-cube-line":
 		top = topology.ThreeCubeLine()
 	case "three-opposed-90":

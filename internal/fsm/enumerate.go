@@ -23,11 +23,18 @@ func Enumerate(top model.Topology, start model.State, v validate.Validator) *Gra
 
 		// Single-hinge moves
 		for _, h := range top.Hinges {
-			nextPoses := []model.HingePose{model.Pose0, model.Pose180}
+			curP := cur.Pose(h.ID)
+			var nextPoses []model.HingePose
+			switch curP {
+			case model.Pose0:
+				nextPoses = []model.HingePose{model.Pose90}
+			case model.Pose90:
+				nextPoses = []model.HingePose{model.Pose0, model.Pose180}
+			case model.Pose180:
+				nextPoses = []model.HingePose{model.Pose90}
+			}
+
 			for _, np := range nextPoses {
-				if cur.Pose(h.ID) == np {
-					continue
-				}
 				mv := model.Move{Changes: []model.HingeChange{{Hinge: h.ID, To: np}}}
 				next := cur.ApplyMove(mv)
 				if _, seen := g.Nodes[next]; seen {
@@ -49,30 +56,44 @@ func Enumerate(top model.Topology, start model.State, v validate.Validator) *Gra
 		for i := 0; i < len(top.Hinges); i++ {
 			for j := i + 1; j < len(top.Hinges); j++ {
 				h1, h2 := top.Hinges[i], top.Hinges[j]
-				nextPoses := []model.HingePose{model.Pose0, model.Pose180}
 
-				for _, np1 := range nextPoses {
-					for _, np2 := range nextPoses {
-						if cur.Pose(h1.ID) == np1 && cur.Pose(h2.ID) == np2 {
-							continue
-						}
+				curP1 := cur.Pose(h1.ID)
+				curP2 := cur.Pose(h2.ID)
 
+				var adj1, adj2 []model.HingePose
+				switch curP1 {
+				case model.Pose0:
+					adj1 = []model.HingePose{model.Pose90}
+				case model.Pose90:
+					adj1 = []model.HingePose{model.Pose0, model.Pose180}
+				case model.Pose180:
+					adj1 = []model.HingePose{model.Pose90}
+				}
+				switch curP2 {
+				case model.Pose0:
+					adj2 = []model.HingePose{model.Pose90}
+				case model.Pose90:
+					adj2 = []model.HingePose{model.Pose0, model.Pose180}
+				case model.Pose180:
+					adj2 = []model.HingePose{model.Pose90}
+				}
+
+				for _, np1 := range adj1 {
+					for _, np2 := range adj2 {
 						mv := model.Move{Changes: []model.HingeChange{
 							{Hinge: h1.ID, To: np1},
 							{Hinge: h2.ID, To: np2},
 						}}
-						if cur.Pose(h1.ID) != np1 && cur.Pose(h2.ID) != np2 {
-							next := cur.ApplyMove(mv)
-							if _, seen := g.Nodes[next]; seen {
-								tr := model.Transition{From: cur, Move: mv, To: next}
-								g.Edges[cur] = append(g.Edges[cur], tr)
-								continue
-							}
+						next := cur.ApplyMove(mv)
+						if _, seen := g.Nodes[next]; seen {
+							tr := model.Transition{From: cur, Move: mv, To: next}
+							g.Edges[cur] = append(g.Edges[cur], tr)
+							continue
+						}
 
-							if tryApply(top, cur, mv, v, g) {
-								g.Nodes[next] = struct{}{}
-								queue = append(queue, next)
-							}
+						if tryApply(top, cur, mv, v, g) {
+							g.Nodes[next] = struct{}{}
+							queue = append(queue, next)
 						}
 					}
 				}
