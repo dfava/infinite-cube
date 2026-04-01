@@ -126,18 +126,10 @@ func handleTopology(w http.ResponseWriter, r *http.Request) {
 		top = topology.SnakeChain(4)
 	case "ring-loop-6":
 		top = topology.RingLoop6()
-	case "branching-star":
-		top = topology.BranchingStar()
-	case "twisted-loop-7":
-		top = topology.TwistedLoop7()
 	case "grid-2x2":
 		top = topology.Grid2x2()
 	case "h-tree":
 		top = topology.HTree()
-	case "figure-eight":
-		top = topology.FigureEight()
-	case "spider":
-		top = topology.Spider()
 	default:
 		http.Error(w, "unknown preset", http.StatusBadRequest)
 		return
