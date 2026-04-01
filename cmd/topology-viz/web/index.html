@@ -45,7 +45,7 @@
       <table>
         <thead>
           <tr>
-            <th>ID</th><th>A</th><th>B</th><th>AxisA</th><th>SignA</th><th>Initial Pose</th><th>AnchorA (x,y,z)</th><th>AnchorB (x,y,z)</th>
+            <th>ID</th><th>A</th><th>B</th><th>AxisA</th><th>SignA</th><th>Initial Pose</th><th>AnchorA (x,y,z)</th><th>AnchorB (x,y,z)</th><th>Actions</th>
           </tr>
         </thead>
         <tbody id="hingeBody"></tbody>
@@ -189,6 +189,7 @@
     function updateHingeMarkers() {
       hingeMarkers.clear();
       topology.hinges.forEach(hg => {
+        if (hg.removed) return;
         const meshA = cubeMeshes.get(hg.a);
         const meshB = cubeMeshes.get(hg.b);
         if (!meshA || !meshB) return;
@@ -343,42 +344,100 @@
       tbody.innerHTML = '';
       topology.hinges.forEach((h, i) => {
         const row = document.createElement('tr');
+        if (h.removed) {
+          row.style.opacity = '0.5';
+          row.style.backgroundColor = '#f9fafb';
+        }
+        const disabledAttr = h.removed ? 'disabled' : '';
         row.innerHTML = `
-          <td><input type="number" min="0" max="15" value="${h.id}" data-i="${i}" data-k="id" /></td>
-          <td><input type="number" min="0" value="${h.a}" data-i="${i}" data-k="a" /></td>
-          <td><input type="number" min="0" value="${h.b}" data-i="${i}" data-k="b" /></td>
+          <td><input type="number" min="0" max="15" value="${h.id}" data-i="${i}" data-k="id" ${disabledAttr} /></td>
+          <td><input type="number" min="0" value="${h.a}" data-i="${i}" data-k="a" ${disabledAttr} /></td>
+          <td><input type="number" min="0" value="${h.b}" data-i="${i}" data-k="b" ${disabledAttr} /></td>
           <td>
-            <select data-i="${i}" data-k="axisA">
+            <select data-i="${i}" data-k="axisA" ${disabledAttr}>
               <option ${h.axisA==='X'?'selected':''}>X</option>
               <option ${h.axisA==='Y'?'selected':''}>Y</option>
               <option ${h.axisA==='Z'?'selected':''}>Z</option>
             </select>
           </td>
           <td>
-            <select data-i="${i}" data-k="signA">
+            <select data-i="${i}" data-k="signA" ${disabledAttr}>
               <option value="1" ${h.signA===1?'selected':''}>+1</option>
               <option value="-1" ${h.signA===-1?'selected':''}>-1</option>
             </select>
           </td>
           <td>
-            <select data-i="${i}" data-k="initialPose">
+            <select data-i="${i}" data-k="initialPose" ${disabledAttr}>
               <option value="0" ${h.initialPose===0?'selected':''}>0°</option>
               <option value="1" ${h.initialPose===1?'selected':''}>90°</option>
               <option value="2" ${h.initialPose===2?'selected':''}>180°</option>
             </select>
           </td>
-          <td><input type="text" value="${h.anchorA?.x ?? 0},${h.anchorA?.y ?? 0},${h.anchorA?.z ?? 0}" data-i="${i}" data-k="anchorA" /></td>
-          <td><input type="text" value="${h.anchorB?.x ?? 0},${h.anchorB?.y ?? 0},${h.anchorB?.z ?? 0}" data-i="${i}" data-k="anchorB" /></td>
+          <td><input type="text" value="${h.anchorA?.x ?? 0},${h.anchorA?.y ?? 0},${h.anchorA?.z ?? 0}" data-i="${i}" data-k="anchorA" ${disabledAttr} /></td>
+          <td><input type="text" value="${h.anchorB?.x ?? 0},${h.anchorB?.y ?? 0},${h.anchorB?.z ?? 0}" data-i="${i}" data-k="anchorB" ${disabledAttr} /></td>
+          <td><button class="secondary toggle-hinge" data-i="${i}" style="color: ${h.removed ? '#166534' : 'var(--danger)'};">${h.removed ? 'Add' : 'Remove'}</button></td>
         `;
+        const toggleBtn = row.querySelector('.toggle-hinge');
+        toggleBtn.addEventListener('click', () => {
+          // Sync current table edits to topology.hinges before toggling
+          window.syncTableToState();
+          h.removed = !h.removed;
+          // Apply changes to the UI
+          window.applyTableEdits(false);
+        });
         tbody.appendChild(row);
       });
     }
 
-    window.applyTableEdits = function() {
-      stopRandomWalk();
-      document.querySelectorAll('#hingeBody [data-i]').forEach(el => {
+    function getActiveTopology() {
+      const activeHinges = topology.hinges.filter(h => !h.removed).map((h, index) => {
+        const activeH = {...h};
+        activeH.id = index;
+        delete activeH.removed;
+        return activeH;
+      });
+      return {
+        ...topology,
+        hinges: activeHinges
+      };
+    }
+
+    function compressPoseBits(bits) {
+      let compressed = 0;
+      let activeIndex = 0;
+      topology.hinges.forEach((h, i) => {
+        if (!h.removed) {
+          const val = (bits >> (2 * i)) & 0x3;
+          compressed |= (val << (2 * activeIndex));
+          activeIndex++;
+        }
+      });
+      return compressed;
+    }
+
+    function decompressPoseBits(compressedBits) {
+      let decompressed = 0;
+      let activeIndex = 0;
+      topology.hinges.forEach((h, i) => {
+        if (!h.removed) {
+          const val = (compressedBits >> (2 * activeIndex)) & 0x3;
+          decompressed |= (val << (2 * i));
+          activeIndex++;
+        } else {
+          // Keep initialPose for removed hinges
+          decompressed |= (h.initialPose << (2 * i));
+        }
+      });
+      return decompressed;
+    }
+
+    window.syncTableToState = function() {
+      const elements = document.querySelectorAll('#hingeBody [data-i][data-k]');
+      elements.forEach(el => {
         const i = Number(el.dataset.i);
         const k = el.dataset.k;
+        if (!topology.hinges[i]) return;
+
         if (k === 'axisA') {
           topology.hinges[i][k] = el.value;
           return;
@@ -394,6 +453,14 @@
         }
         topology.hinges[i][k] = Number(el.value);
       });
+    }
+
+    window.applyTableEdits = function(shouldSync = true) {
+      stopRandomWalk();
+      if (shouldSync) {
+        window.syncTableToState();
+      }
+      renderTable();
       renderToggles();
       renderViz();
       window.runValidate();
@@ -403,8 +470,9 @@
     function renderToggles() {
       const box = document.getElementById('hingeToggles');
       box.innerHTML = '';
-      topology.hinges.forEach(h => {
-        const id = `pose_bit_${h.id}`;
+      topology.hinges.forEach((h, i) => {
+        if (h.removed) return;
+        const id = `pose_bit_${i}`;
         const wrap = document.createElement('div');
         wrap.className = 'toggle-group';
         wrap.style.display = 'flex';
@@ -418,7 +486,7 @@
 
         const select = document.createElement('select');
         select.id = id;
-        select.dataset.hingeId = h.id;
+        select.dataset.hingeId = i;
         select.innerHTML = `
           <option value="0">0°</option>
           <option value="1">90°</option>
@@ -506,10 +574,20 @@
     function readPoseBits() {
       let bits = 0;
       document.querySelectorAll('#hingeToggles select').forEach(sel => {
-        const id = Number(sel.dataset.hingeId);
+        const i = Number(sel.dataset.hingeId);
         const val = Number(sel.value);
-        if (id >= 0 && id < 16) {
-          bits |= (val << (2 * id));
+        if (i >= 0 && i < 16) {
+          bits |= (val << (2 * i));
+        }
+      });
+      // For removed hinges, we should ideally use their initialPose or keep current bits.
+      // Since readPoseBits only reads from Toggles, and removed hinges have no toggles,
+      // we need to make sure we don't lose the state of removed hinges if we care about it.
+      // But usually removed hinges are treated as "not there".
+      // Let's ensure we preserve the "initialPose" bits for removed hinges so they don't default to 0.
+      topology.hinges.forEach((h, i) => {
+        if (h.removed) {
+          bits |= (h.initialPose << (2 * i));
         }
       });
       return bits;
@@ -517,8 +595,8 @@
 
     function setPoseBits(bits) {
       document.querySelectorAll('#hingeToggles select').forEach(sel => {
-        const id = Number(sel.dataset.hingeId);
-        const val = (bits >> (2 * id)) & 0x3;
+        const i = Number(sel.dataset.hingeId);
+        const val = (bits >> (2 * i)) & 0x3;
         sel.value = String(val);
         // Update the smart button text manually to avoid redundant 'change' event logic
         const smartBtn = sel.nextElementSibling;
@@ -535,27 +613,29 @@
         poseBits = readPoseBits();
       }
       currentValidateBits = poseBits;
+      const activeTop = getActiveTopology();
+      const compressedBits = compressPoseBits(poseBits);
       fetch('/api/validate', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ topology, poseBits }),
+        body: JSON.stringify({ topology: activeTop, poseBits: compressedBits }),
       })
       .then(r => r.json())
       .then(res => {
         // Only show if this is still the most recent validation request
-        if (currentValidateBits === res.poseBits) {
-          showValidation(res);
+        if (currentValidateBits === poseBits) {
+          showValidation(res, poseBits);
         }
       });
     }
 
-    function showValidation(res) {
+    function showValidation(res, originalPoseBits) {
       const status = document.getElementById('status');
       status.className = 'status ' + (res.valid ? 'ok' : 'bad');
       status.textContent = res.valid ? 'Valid state' : 'Invalid state';
 
       document.getElementById('meta').textContent =
-        `cubes=${res.cubeCount}, hinges=${res.hingeCount}, poseBits=${res.poseBits} (bin ${res.poseBitsBin})`;
+        `cubes=${res.cubeCount}, hinges=${res.hingeCount}, poseBits=${originalPoseBits} (bin ${originalPoseBits.toString(2)})`;
 
       const ul = document.getElementById('issues');
       ul.innerHTML = '';
@@ -587,10 +667,12 @@
       box.innerHTML = '<div class="muted">Exploring...</div>';
 
       const poseBits = readPoseBits();
+      const activeTop = getActiveTopology();
+      const compressedBits = compressPoseBits(poseBits);
       fetch('/api/enumerate', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ topology, poseBits, presetName: currentPresetName }),
+        body: JSON.stringify({ topology: activeTop, poseBits: compressedBits, presetName: currentPresetName }),
       })
       .then(r => r.json())
       .then(res => {
@@ -615,6 +697,7 @@
         const toDisplay = res.states.slice(0, maxDisplay);
 
         toDisplay.forEach((bits) => {
+          const decompressedBits = decompressPoseBits(bits);
           const wrap = document.createElement('div');
           wrap.style.display = 'flex';
           wrap.style.alignItems = 'center';
@@ -626,12 +709,12 @@
           btn.style.fontSize = '11px';
           btn.style.padding = '2px 6px';
           // 2 bits per hinge
-          btn.textContent = `${bits.toString(4).padStart(topology.hinges.length, '0')}`;
+          btn.textContent = `${decompressedBits.toString(4).padStart(topology.hinges.length, '0')}`;
           btn.addEventListener('click', () => {
             stopRandomWalk();
-            setPoseBits(bits);
-            handlePoseChange(bits);
-            window.runValidate(bits);
+            setPoseBits(decompressedBits);
+            handlePoseChange(decompressedBits);
+            window.runValidate(decompressedBits);
           });
           wrap.appendChild(btn);
           const span = document.createElement('span');
@@ -657,10 +740,12 @@
     }
 
     async function fetchPoses(poseBits) {
+      const activeTop = getActiveTopology();
+      const compressedBits = compressPoseBits(poseBits);
       const res = await fetch('/api/poses', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ topology, poseBits }),
+        body: JSON.stringify({ topology: activeTop, poseBits: compressedBits }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -668,7 +753,7 @@
       }
       const byCube = new Map();
       (data.poses || []).forEach(p => byCube.set(Number(p.cube), p));
-      return { ok: true, poseBits: data.poseBits, byCube, error: data.error };
+      return { ok: true, poseBits: decompressPoseBits(data.poseBits), byCube, error: data.error };
     }
 
     function calculateIntermediate(oldBits, newBits) {
@@ -678,14 +763,14 @@
       let needed = false;
 
       for (let i = 0; i < topology.hinges.length; i++) {
-        const id = topology.hinges[i].id;
-        const oldPose = (oldBits >> (2 * id)) & 0x3;
-        const newPose = (newBits >> (2 * id)) & 0x3;
+        if (topology.hinges[i].removed) continue;
+        const oldPose = (oldBits >> (2 * i)) & 0x3;
+        const newPose = (newBits >> (2 * i)) & 0x3;
 
         // If flipping 0 <-> 2, inject 1 (Pose90) in between
         if ((oldPose === 0 && newPose === 2) || (oldPose === 2 && newPose === 0)) {
-          const mask = 0x3 << (2 * id);
-          intermediate = (intermediate & ~mask) | (1 << (2 * id));
+          const mask = 0x3 << (2 * i);
+          intermediate = (intermediate & ~mask) | (1 << (2 * i));
           needed = true;
         }
       }
@@ -798,8 +883,14 @@
       });
 
       const cubeLegend = `Cubes: ${cubes.map(c => `Cube ${c}`).join(', ') || '(none)'}`;
-      const hingeLegend = `Hinges: ${topology.hinges.map(h => `H${h.id}=Cube ${h.a}\u2194Cube ${h.b}`).join(' | ') || '(none)'}`;
+      const hingeLegend = `Hinges: ${topology.hinges.filter(h => !h.removed).map(h => `H${h.id}=Cube ${h.a}\u2194Cube ${h.b}`).join(' | ') || '(none)'}`;
       document.getElementById('vizLegend').textContent = `${cubeLegend}. ${hingeLegend}.`;
+
+      // Update Hinge Markers immediately if not already moving
+      if (!isMoving) {
+        updateHingeMarkers();
+      }
+
       if (poseResult.error) {
         poseStatus.textContent = `Collision: ${poseResult.error}`;
         poseStatus.style.color = 'red';
@@ -819,15 +910,21 @@
 
     function renderTransitionGraph(states, transitions) {
       if (!states) return;
-      document.getElementById('graphNodeCount').textContent = states.length;
-      document.getElementById('graphEdgeCount').textContent = (transitions || []).length;
+      const decompressedStates = states.map(s => decompressPoseBits(s));
+      const decompressedTransitions = (transitions || []).map(t => ({
+        from: decompressPoseBits(t.from),
+        to: decompressPoseBits(t.to)
+      }));
+
+      document.getElementById('graphNodeCount').textContent = decompressedStates.length;
+      document.getElementById('graphEdgeCount').textContent = decompressedTransitions.length;
       
       const width = graphContainer.clientWidth;
       const height = graphContainer.clientHeight;
       canvas.width = width;
       canvas.height = height;
 
-      if (states.length === 0) {
+      if (decompressedStates.length === 0) {
         graphNodes = [];
         graphEdges = [];
         document.getElementById('graphEdgeCount').textContent = 0;
@@ -839,7 +936,7 @@
       // Use D3 to manage nodes and simulation
       // Map states to nodes, preserving positions if they already exist
       const existingNodes = new Map(graphNodes.map(n => [n.id, n]));
-      graphNodes = states.map(s => {
+      graphNodes = decompressedStates.map(s => {
         const old = existingNodes.get(s);
         return {
           id: s,
@@ -848,7 +945,7 @@
         };
       });
 
-      graphEdges = (transitions || []).map(t => {
+      graphEdges = decompressedTransitions.map(t => {
         const diff = t.from ^ t.to;
         // Identify which hinge changed (e.g., hinge K)
         // Each hinge uses 2 bits.

@@ -42,8 +42,8 @@ func SnakeChain(numCubes int) model.Topology {
 			anchorB = model.Vec3{X: 0.5, Y: 0, Z: -0.5}
 		case model.AxisZ:
 			// Hinge along Z axis on the X-face (to change direction of the chain)
-			anchorA = model.Vec3{X: 0.5, Y: 0.5, Z: 0}
-			anchorB = model.Vec3{X: -0.5, Y: 0.5, Z: 0}
+			anchorA = model.Vec3{X: 0.5, Y: -0.5, Z: 0}
+			anchorB = model.Vec3{X: -0.5, Y: -0.5, Z: 0}
 		}
 
 		hinges[i] = model.Hinge{
@@ -51,7 +51,7 @@ func SnakeChain(numCubes int) model.Topology {
 			A:       model.CubeID(i),
 			B:       model.CubeID(i + 1),
 			AxisA:   axis,
-			SignA:   1,
+			SignA:   int8(2*(i%2) - 1),
 			AnchorA: anchorA,
 			AnchorB: anchorB,
 		}

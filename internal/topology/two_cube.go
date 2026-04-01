@@ -61,8 +61,8 @@ func TwoCubeBrokenHinge() model.Topology {
 			B:       1,
 			AxisA:   model.AxisY,
 			SignA:   1,
-			AnchorA: model.Vec3{X: 0.5, Y: 0, Z: 0.5},
-			AnchorB: model.Vec3{X: -0.5, Y: 0, Z: 0.5},
+			AnchorA: model.Vec3{X: 0.5, Y: 0, Z: -0.5},
+			AnchorB: model.Vec3{X: -0.5, Y: 0, Z: -0.5},
 		},
 	}
 	return model.Topology{Cubes: cubes, Hinges: hinges}
