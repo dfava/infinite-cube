@@ -158,6 +158,16 @@ func TestHingeAlignment(t *testing.T) {
 			},
 			hasIssue: true,
 		},
+		{
+			name: "Hinge Not Centered on Edge",
+			hinge: model.Hinge{
+				ID:      0,
+				AxisA:   model.AxisX,
+				AnchorA: model.Vec3{X: 0.1, Y: 0.5, Z: 0.5},
+				AnchorB: model.Vec3{X: 0.1, Y: -0.5, Z: 0.5},
+			},
+			hasIssue: true,
+		},
 	}
 
 	for _, tt := range tests {

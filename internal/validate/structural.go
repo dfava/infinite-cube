@@ -12,6 +12,10 @@ import (
 // StructuralValidator enforces basic topology/state consistency checks.
 type StructuralValidator struct{}
 
+func (StructuralValidator) ValidTopology(top model.Topology) bool {
+	return len(AnalyzeTopology(top).Issues) == 0
+}
+
 func (StructuralValidator) ValidState(top model.Topology, s model.State) bool {
 	return len(AnalyzeState(top, s).Issues) == 0
 }
@@ -250,6 +254,24 @@ func checkHingeAlignment(h model.Hinge) string {
 
 	if h.AxisA != edgeDir {
 		return fmt.Sprintf("hinge %d axis %s does not match edge direction %s of cube A", h.ID, h.AxisA, edgeDir)
+	}
+
+	// Rule: If hinge axis is X, X-coord must be 0. Same for Y and Z.
+	// This ensures the hinge is centered on the edge.
+	var axisValA, axisValB float64
+	switch h.AxisA {
+	case model.AxisX:
+		axisValA, axisValB = h.AnchorA.X, h.AnchorB.X
+	case model.AxisY:
+		axisValA, axisValB = h.AnchorA.Y, h.AnchorB.Y
+	case model.AxisZ:
+		axisValA, axisValB = h.AnchorA.Z, h.AnchorB.Z
+	}
+	if math.Abs(axisValA) > 1e-6 {
+		return fmt.Sprintf("hinge %d on %s axis must have %s-coordinate 0 in cube A (got %f)", h.ID, h.AxisA, h.AxisA, axisValA)
+	}
+	if math.Abs(axisValB) > 1e-6 {
+		return fmt.Sprintf("hinge %d on %s axis must have %s-coordinate 0 in cube B (got %f)", h.ID, h.AxisA, h.AxisA, axisValB)
 	}
 
 	// Shared edge check: in Pose0 (identity rotation), the anchors must refer to the same world point

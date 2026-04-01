@@ -20,8 +20,8 @@ func BranchingStar() model.Topology {
 			B:       1,
 			AxisA:   model.AxisX,
 			SignA:   1,
-			AnchorA: model.Vec3{X: 0.5, Y: 0.5, Z: 0.5},
-			AnchorB: model.Vec3{X: -0.5, Y: 0.5, Z: 0.5},
+			AnchorA: model.Vec3{X: 0, Y: 0.5, Z: 0.5},
+			AnchorB: model.Vec3{X: 0, Y: 0.5, Z: 0.5},
 		},
 		{
 			ID:      1,
@@ -29,8 +29,8 @@ func BranchingStar() model.Topology {
 			B:       2,
 			AxisA:   model.AxisX,
 			SignA:   1,
-			AnchorA: model.Vec3{X: -0.5, Y: -0.5, Z: -0.5},
-			AnchorB: model.Vec3{X: 0.5, Y: -0.5, Z: -0.5},
+			AnchorA: model.Vec3{X: 0, Y: -0.5, Z: -0.5},
+			AnchorB: model.Vec3{X: 0, Y: -0.5, Z: -0.5},
 		},
 		{
 			ID:      2,
@@ -38,8 +38,8 @@ func BranchingStar() model.Topology {
 			B:       3,
 			AxisA:   model.AxisY,
 			SignA:   1,
-			AnchorA: model.Vec3{X: 0.5, Y: 0.5, Z: -0.5},
-			AnchorB: model.Vec3{X: 0.5, Y: -0.5, Z: -0.5},
+			AnchorA: model.Vec3{X: 0.5, Y: 0, Z: -0.5},
+			AnchorB: model.Vec3{X: 0.5, Y: 0, Z: -0.5},
 		},
 		{
 			ID:      3,
@@ -47,8 +47,8 @@ func BranchingStar() model.Topology {
 			B:       4,
 			AxisA:   model.AxisY,
 			SignA:   1,
-			AnchorA: model.Vec3{X: -0.5, Y: -0.5, Z: 0.5},
-			AnchorB: model.Vec3{X: -0.5, Y: 0.5, Z: 0.5},
+			AnchorA: model.Vec3{X: -0.5, Y: 0, Z: 0.5},
+			AnchorB: model.Vec3{X: -0.5, Y: 0, Z: 0.5},
 		},
 		{
 			ID:      4,
@@ -56,8 +56,8 @@ func BranchingStar() model.Topology {
 			B:       5,
 			AxisA:   model.AxisZ,
 			SignA:   1,
-			AnchorA: model.Vec3{X: -0.5, Y: 0.5, Z: 0.5},
-			AnchorB: model.Vec3{X: -0.5, Y: 0.5, Z: -0.5},
+			AnchorA: model.Vec3{X: -0.5, Y: 0.5, Z: 0},
+			AnchorB: model.Vec3{X: -0.5, Y: 0.5, Z: 0},
 		},
 		{
 			ID:      5,
@@ -65,8 +65,8 @@ func BranchingStar() model.Topology {
 			B:       6,
 			AxisA:   model.AxisZ,
 			SignA:   1,
-			AnchorA: model.Vec3{X: 0.5, Y: -0.5, Z: -0.5},
-			AnchorB: model.Vec3{X: 0.5, Y: -0.5, Z: 0.5},
+			AnchorA: model.Vec3{X: 0.5, Y: -0.5, Z: 0},
+			AnchorB: model.Vec3{X: 0.5, Y: -0.5, Z: 0},
 		},
 	}
 

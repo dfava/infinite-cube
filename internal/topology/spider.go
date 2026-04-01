@@ -20,16 +20,16 @@ func Spider() model.Topology {
 
 	hinges := []model.Hinge{
 		// Central "Ring" (Open chain in Pose0)
-		{ID: 0, A: 0, B: 1, AxisA: model.AxisX, AnchorA: model.Vec3{X: 0.5, Y: 0.5, Z: 0.5}, AnchorB: model.Vec3{X: -0.5, Y: 0.5, Z: 0.5}},
-		{ID: 1, A: 1, B: 2, AxisA: model.AxisY, AnchorA: model.Vec3{X: 0.5, Y: 0.5, Z: 0.5}, AnchorB: model.Vec3{X: 0.5, Y: -0.5, Z: 0.5}},
-		{ID: 2, A: 2, B: 3, AxisA: model.AxisZ, AnchorA: model.Vec3{X: 0.5, Y: 0.5, Z: 0.5}, AnchorB: model.Vec3{X: 0.5, Y: 0.5, Z: -0.5}},
-		{ID: 3, A: 3, B: 4, AxisA: model.AxisX, AnchorA: model.Vec3{X: 0.5, Y: 0.5, Z: 0.5}, AnchorB: model.Vec3{X: -0.5, Y: 0.5, Z: 0.5}},
-		{ID: 4, A: 4, B: 5, AxisA: model.AxisY, AnchorA: model.Vec3{X: 0.5, Y: 0.5, Z: 0.5}, AnchorB: model.Vec3{X: 0.5, Y: -0.5, Z: 0.5}},
+		{ID: 0, A: 0, B: 1, AxisA: model.AxisX, AnchorA: model.Vec3{X: 0, Y: 0.5, Z: 0.5}, AnchorB: model.Vec3{X: 0, Y: 0.5, Z: 0.5}},
+		{ID: 1, A: 1, B: 2, AxisA: model.AxisY, AnchorA: model.Vec3{X: 0.5, Y: 0, Z: 0.5}, AnchorB: model.Vec3{X: 0.5, Y: 0, Z: 0.5}},
+		{ID: 2, A: 2, B: 3, AxisA: model.AxisZ, AnchorA: model.Vec3{X: 0.5, Y: 0.5, Z: 0}, AnchorB: model.Vec3{X: 0.5, Y: 0.5, Z: 0}},
+		{ID: 3, A: 3, B: 4, AxisA: model.AxisX, AnchorA: model.Vec3{X: 0, Y: 0.5, Z: 0.5}, AnchorB: model.Vec3{X: 0, Y: 0.5, Z: 0.5}},
+		{ID: 4, A: 4, B: 5, AxisA: model.AxisY, AnchorA: model.Vec3{X: 0.5, Y: 0, Z: 0.5}, AnchorB: model.Vec3{X: 0.5, Y: 0, Z: 0.5}},
 
 		// Legs (connected to alternate cubes in the ring)
-		{ID: 5, A: 0, B: 6, AxisA: model.AxisY, AnchorA: model.Vec3{X: -0.5, Y: -0.5, Z: -0.5}, AnchorB: model.Vec3{X: -0.5, Y: 0.5, Z: -0.5}},
-		{ID: 6, A: 2, B: 7, AxisA: model.AxisX, AnchorA: model.Vec3{X: -0.5, Y: -0.5, Z: -0.5}, AnchorB: model.Vec3{X: 0.5, Y: -0.5, Z: -0.5}},
-		{ID: 7, A: 4, B: 8, AxisA: model.AxisZ, AnchorA: model.Vec3{X: -0.5, Y: -0.5, Z: -0.5}, AnchorB: model.Vec3{X: -0.5, Y: -0.5, Z: 0.5}},
+		{ID: 5, A: 0, B: 6, AxisA: model.AxisY, AnchorA: model.Vec3{X: -0.5, Y: 0, Z: -0.5}, AnchorB: model.Vec3{X: -0.5, Y: 0, Z: -0.5}},
+		{ID: 6, A: 2, B: 7, AxisA: model.AxisX, AnchorA: model.Vec3{X: 0, Y: -0.5, Z: -0.5}, AnchorB: model.Vec3{X: 0, Y: -0.5, Z: -0.5}},
+		{ID: 7, A: 4, B: 8, AxisA: model.AxisZ, AnchorA: model.Vec3{X: -0.5, Y: -0.5, Z: 0}, AnchorB: model.Vec3{X: -0.5, Y: -0.5, Z: 0}},
 	}
 
 	for i := range hinges {
