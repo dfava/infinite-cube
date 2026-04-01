@@ -258,6 +258,7 @@
     window.loadPreset = function() {
       stopRandomWalk();
       const preset = document.getElementById('preset').value;
+      currentPresetName = preset;
       fetch(`/api/topology?preset=${encodeURIComponent(preset)}`)
         .then(r => r.json())
         .then(data => {
@@ -580,7 +581,9 @@
       document.getElementById('issues').innerHTML = '';
       document.getElementById('meta').textContent = '';
     }
-
+ 
+    let currentPresetName = 'two-cube-hinge';
+ 
     window.exploreStates = function() {
       const box = document.getElementById('exploreList');
       box.innerHTML = '<div class="muted">Exploring...</div>';
@@ -589,7 +592,7 @@
       fetch('/api/enumerate', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ topology, poseBits }),
+        body: JSON.stringify({ topology, poseBits, presetName: currentPresetName }),
       })
       .then(r => r.json())
       .then(res => {

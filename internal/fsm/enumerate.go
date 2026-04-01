@@ -29,12 +29,16 @@ func Enumerate(top model.Topology, start model.State, v validate.Validator) *Gra
 					continue
 				}
 				mv := model.Move{Changes: []model.HingeChange{{Hinge: h.ID, To: np}}}
+				next := cur.ApplyMove(mv)
+				if _, seen := g.Nodes[next]; seen {
+					// We still need to record the edge if it's new
+					tr := model.Transition{From: cur, Move: mv, To: next}
+					g.Edges[cur] = append(g.Edges[cur], tr)
+					continue
+				}
 				if tryApply(top, cur, mv, v, g) {
-					next := cur.ApplyMove(mv)
-					if _, seen := g.Nodes[next]; !seen {
-						g.Nodes[next] = struct{}{}
-						queue = append(queue, next)
-					}
+					g.Nodes[next] = struct{}{}
+					queue = append(queue, next)
 				}
 			}
 		}
@@ -58,12 +62,16 @@ func Enumerate(top model.Topology, start model.State, v validate.Validator) *Gra
 							{Hinge: h2.ID, To: np2},
 						}}
 						if cur.Pose(h1.ID) != np1 && cur.Pose(h2.ID) != np2 {
+							next := cur.ApplyMove(mv)
+							if _, seen := g.Nodes[next]; seen {
+								tr := model.Transition{From: cur, Move: mv, To: next}
+								g.Edges[cur] = append(g.Edges[cur], tr)
+								continue
+							}
+
 							if tryApply(top, cur, mv, v, g) {
-								next := cur.ApplyMove(mv)
-								if _, seen := g.Nodes[next]; !seen {
-									g.Nodes[next] = struct{}{}
-									queue = append(queue, next)
-								}
+								g.Nodes[next] = struct{}{}
+								queue = append(queue, next)
 							}
 						}
 					}

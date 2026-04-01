@@ -13,10 +13,16 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
+	"sync"
+	"time"
 )
 
 //go:embed web/*
 var webFS embed.FS
+
+var (
+	enumerateCache sync.Map // map[string]enumerateResponse
+)
 
 type topologyJSON struct {
 	Cubes  []int       `json:"cubes"`
@@ -37,8 +43,9 @@ type hingeJSON struct {
 }
 
 type validateRequest struct {
-	Topology topologyJSON `json:"topology"`
-	PoseBits uint32       `json:"poseBits"`
+	Topology   topologyJSON `json:"topology"`
+	PoseBits   uint32       `json:"poseBits"`
+	PresetName string       `json:"presetName,omitempty"`
 }
 
 type validateResponse struct {
@@ -190,16 +197,25 @@ func handleEnumerate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if req.PresetName != "" {
+		if val, ok := enumerateCache.Load(req.PresetName); ok {
+			writeJSON(w, val)
+			return
+		}
+	}
+
 	top, err := fromTopologyJSON(req.Topology)
 	if err != nil {
 		writeJSONWithStatus(w, http.StatusBadRequest, apiError{Error: err.Error()})
 		return
 	}
 
-	start := model.State{PoseBits: req.PoseBits}
+	start := time.Now()
+	startState := model.State{PoseBits: req.PoseBits}
 	validator := validate.StructuralValidator{}
 
-	graph := fsm.Enumerate(top, start, validator)
+	graph := fsm.Enumerate(top, startState, validator)
+	log.Printf("Enumerate for %s took %v (found %d states)", req.PresetName, time.Since(start), len(graph.Nodes))
 
 	states := make([]uint32, 0, len(graph.Nodes))
 	for s := range graph.Nodes {
@@ -228,7 +244,12 @@ func handleEnumerate(w http.ResponseWriter, r *http.Request) {
 		return states[i] < states[j]
 	})
 
-	writeJSON(w, enumerateResponse{States: states, Transitions: transitions})
+	resp := enumerateResponse{States: states, Transitions: transitions}
+	if req.PresetName != "" {
+		enumerateCache.Store(req.PresetName, resp)
+	}
+
+	writeJSON(w, resp)
 }
 
 func handlePoses(w http.ResponseWriter, r *http.Request) {
