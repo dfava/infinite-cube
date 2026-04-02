@@ -132,6 +132,8 @@ func handleTopology(w http.ResponseWriter, r *http.Request) {
 		top = topology.Grid2x2()
 	case "h-tree":
 		top = topology.HTree()
+	case "book-3":
+		top = topology.Book(3)
 	default:
 		http.Error(w, "unknown preset", http.StatusBadRequest)
 		return
