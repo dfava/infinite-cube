@@ -133,8 +133,12 @@ func handleTopology(w http.ResponseWriter, r *http.Request) {
 		top = topology.RingLoop6()
 	case "grid-2x2":
 		top = topology.Grid2x2()
-	case "h-tree":
-		top = topology.HTree()
+	case "h-tree-1":
+		top = topology.HTree(1)
+	case "h-tree-2":
+		top = topology.HTree(2)
+	case "h-tree-3":
+		top = topology.HTree(3)
 	case "book-3":
 		top = topology.Book(3)
 		maxSim = 3

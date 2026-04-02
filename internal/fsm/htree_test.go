@@ -9,7 +9,7 @@ import (
 )
 
 func TestHTreeTransitions(t *testing.T) {
-	top := topology.HTree()
+	top := topology.HTree(2)
 	start := model.State{}
 	v := validate.PermissiveValidator{}
 
