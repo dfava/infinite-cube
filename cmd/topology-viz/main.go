@@ -178,6 +178,12 @@ func handleTopology(w http.ResponseWriter, r *http.Request) {
 		}
 		top = topology.Book(param)
 		maxSim = 3
+	case "tetrahedral-cluster":
+		top = topology.TetrahedralCluster()
+	case "expanding-star":
+		top = topology.ExpandingStar()
+	case "mobius-strip":
+		top = topology.MobiusStrip()
 	default:
 		http.Error(w, "unknown preset", http.StatusBadRequest)
 		return

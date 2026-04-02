@@ -20,6 +20,9 @@ func TestAPIParametric(t *testing.T) {
 		{"h-tree", "2", 8, 7},
 		{"book", "2", 4, 4},
 		{"snake", "3", 3, 2},
+		{"tetrahedral-cluster", "", 4, 3},
+		{"expanding-star", "", 13, 12},
+		{"mobius-strip", "", 10, 9},
 		{"", "", 2, 1}, // Default two-cube-hinge
 	}
 

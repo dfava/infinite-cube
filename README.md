@@ -55,6 +55,9 @@ The `internal/topology` package includes several presets:
 8.  **Snake (Parametric)**: A linear chain of cubes with a configurable length.
 9.  **Ring Loop 6**: A 6-cube ring loop.
 10. **Grid 2x2**: A 2x2 grid of cubes.
+11. **Tetrahedral Cluster**: A 4-cube tetrahedral cluster that introduces multi-axial movement constraints.
+12. **Expanding Star**: A central cube with chains expanding from all six faces, mimicking biological forms like radiolarians.
+13. **Mobius Strip**: A strip of 10 cubes designed to twist and close into a non-orientable surface.
 
 ## Technical Details
 
