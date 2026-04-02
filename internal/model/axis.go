@@ -47,15 +47,3 @@ func (a Axis) UnitVector() Vec3 {
 		return Vec3{Z: 1}
 	}
 }
-
-func (a Axis) PerpVector() Vec3 {
-	// Deterministic but arbitrary local offset direction for center-to-center spacing.
-	switch a {
-	case AxisX:
-		return Vec3{Y: 1}
-	case AxisY:
-		return Vec3{Z: 1}
-	default:
-		return Vec3{X: 1}
-	}
-}
