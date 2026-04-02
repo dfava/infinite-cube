@@ -15,7 +15,7 @@ func TestTwoCubeHinge(t *testing.T) {
 	require.Empty(t, report.Issues, "Expected no issues in TwoCubeHinge topology")
 
 	// The initial state for fsm.Enumerate is all hinges at Pose0 by default.
-	graph := fsm.Enumerate(cube, model.State{}, validate.StructuralValidator{}, 1)
+	graph := fsm.Enumerate(cube, model.State{}, &validate.StructuralValidator{}, 1)
 
 	// 1 hinge, 3 possible poses: Pose0, Pose90, Pose180.
 	// Since there are no collisions or constraints, all 3 should be reachable.

@@ -153,7 +153,7 @@
     const hingeMarkers = new THREE.Group();
     scene.add(hingeMarkers);
 
-    let currentPoseBits = 0;
+    let currentPoseBits = 0n;
     let animationQueue = [];
     let isMoving = false;
     let isRandomWalking = false;
@@ -276,9 +276,9 @@
           renderTable();
           renderToggles();
           
-          let initialBits = 0;
+          let initialBits = 0n;
           topology.hinges.forEach(h => {
-            initialBits |= (h.initialPose << (2 * h.id));
+            initialBits |= (BigInt(h.initialPose) << BigInt(2 * h.id));
           });
           
           currentPoseBits = initialBits;
@@ -291,9 +291,9 @@
 
     document.getElementById('resetPose').addEventListener('click', () => {
       stopRandomWalk();
-      let initialBits = 0;
+      let initialBits = 0n;
       topology.hinges.forEach(h => {
-        initialBits |= (h.initialPose << (2 * h.id));
+        initialBits |= (BigInt(h.initialPose) << BigInt(2 * h.id));
       });
       setPoseBits(initialBits);
       handlePoseChange(initialBits);
@@ -330,8 +330,8 @@
       // Find neighbors of currentPoseBits in graphEdges
       const neighbors = [];
       graphEdges.forEach(e => {
-        const sourceId = e.source.id !== undefined ? e.source.id : e.source;
-        const targetId = e.target.id !== undefined ? e.target.id : e.target;
+        const sourceId = BigInt(e.source.id !== undefined ? e.source.id : e.source);
+        const targetId = BigInt(e.target.id !== undefined ? e.target.id : e.target);
         if (sourceId === currentPoseBits) {
           neighbors.push(targetId);
         } else if (targetId === currentPoseBits) {
@@ -361,7 +361,7 @@
         }
         const disabledAttr = h.removed ? 'disabled' : '';
         row.innerHTML = `
-          <td><input type="number" min="0" max="15" value="${h.id}" data-i="${i}" data-k="id" ${disabledAttr} /></td>
+          <td><input type="number" min="0" max="31" value="${h.id}" data-i="${i}" data-k="id" ${disabledAttr} /></td>
           <td><input type="number" min="0" value="${h.a}" data-i="${i}" data-k="a" ${disabledAttr} /></td>
           <td><input type="number" min="0" value="${h.b}" data-i="${i}" data-k="b" ${disabledAttr} /></td>
           <td>
@@ -414,29 +414,37 @@
     }
 
     function compressPoseBits(bits) {
-      let compressed = 0;
+      let compressed = 0n;
       let activeIndex = 0;
+      const bBits = BigInt(bits);
       topology.hinges.forEach((h, i) => {
         if (!h.removed) {
-          const val = (bits >> (2 * i)) & 0x3;
-          compressed |= (val << (2 * activeIndex));
+          const val = (bBits >> BigInt(2 * i)) & 0x3n;
+          compressed |= (val << BigInt(2 * activeIndex));
           activeIndex++;
         }
       });
-      return compressed;
+      // The Go backend expects a number, but for larger than 32-bit values we need to handle it.
+      // However, the backend should be using uint64, which JSON numbers can't fully represent accurately.
+      // But for up to 32 hinges (64 bits), we might need to send it as a string or BigInt.
+      // Given the previous fixes, it seems the backend is using uint64.
+      // We'll return it as a string to be safe if it's large, but Number might work up to 53 bits.
+      // Let's use string to avoid precision loss if it's > 53 bits.
+      return compressed.toString();
     }
 
     function decompressPoseBits(compressedBits) {
-      let decompressed = 0;
+      let decompressed = 0n;
       let activeIndex = 0;
+      const bCompressed = BigInt(compressedBits);
       topology.hinges.forEach((h, i) => {
         if (!h.removed) {
-          const val = (compressedBits >> (2 * activeIndex)) & 0x3;
-          decompressed |= (val << (2 * i));
+          const val = (bCompressed >> BigInt(2 * activeIndex)) & 0x3n;
+          decompressed |= (val << BigInt(2 * i));
           activeIndex++;
         } else {
           // Keep initialPose for removed hinges
-          decompressed |= (h.initialPose << (2 * i));
+          decompressed |= (BigInt(h.initialPose) << BigInt(2 * i));
         }
       });
       return decompressed;
@@ -583,12 +591,12 @@
     }
 
     function readPoseBits() {
-      let bits = 0;
+      let bits = 0n;
       document.querySelectorAll('#hingeToggles select').forEach(sel => {
         const i = Number(sel.dataset.hingeId);
-        const val = Number(sel.value);
-        if (i >= 0 && i < 16) {
-          bits |= (val << (2 * i));
+        const val = BigInt(sel.value);
+        if (i >= 0 && i < 32) {
+          bits |= (val << BigInt(2 * i));
         }
       });
       // For removed hinges, we should ideally use their initialPose or keep current bits.
@@ -598,16 +606,17 @@
       // Let's ensure we preserve the "initialPose" bits for removed hinges so they don't default to 0.
       topology.hinges.forEach((h, i) => {
         if (h.removed) {
-          bits |= (h.initialPose << (2 * i));
+          bits |= (BigInt(h.initialPose) << BigInt(2 * i));
         }
       });
       return bits;
     }
 
     function setPoseBits(bits) {
+      const bBits = BigInt(bits);
       document.querySelectorAll('#hingeToggles select').forEach(sel => {
         const i = Number(sel.dataset.hingeId);
-        const val = (bits >> (2 * i)) & 0x3;
+        const val = (bBits >> BigInt(2 * i)) & 0x3n;
         sel.value = String(val);
         // Update the smart button text manually to avoid redundant 'change' event logic
         const smartBtn = sel.nextElementSibling;
@@ -617,13 +626,13 @@
       });
     }
 
-    let currentValidateBits = -1;
+    let currentValidateBits = -1n;
 
     window.runValidate = function(poseBits) {
       if (poseBits === undefined) {
         poseBits = readPoseBits();
       }
-      currentValidateBits = poseBits;
+      currentValidateBits = BigInt(poseBits);
       const activeTop = getActiveTopology();
       const compressedBits = compressPoseBits(poseBits);
       fetch('/api/validate', {
@@ -634,7 +643,7 @@
       .then(r => r.json())
       .then(res => {
         // Only show if this is still the most recent validation request
-        if (currentValidateBits === poseBits) {
+        if (currentValidateBits === BigInt(poseBits)) {
           showValidation(res, poseBits);
         }
       });
@@ -646,7 +655,7 @@
       status.textContent = res.valid ? 'Valid state' : 'Invalid state';
 
       document.getElementById('meta').textContent =
-        `cubes=${res.cubeCount}, hinges=${res.hingeCount}, poseBits=${originalPoseBits} (bin ${originalPoseBits.toString(2)})`;
+        `cubes=${res.cubeCount}, hinges=${res.hingeCount}, poseBits=0x${BigInt(originalPoseBits).toString(16).toUpperCase()} (bin ${BigInt(originalPoseBits).toString(2)})`;
 
       const ul = document.getElementById('issues');
       ul.innerHTML = '';
@@ -776,18 +785,19 @@
     function calculateIntermediate(oldBits, newBits) {
       // For each hinge, if transitioning between Pose0(0) and Pose180(2), pass through Pose90(1).
       // Note: HingePose values are Pose0=0, Pose90=1, Pose180=2.
-      let intermediate = oldBits;
+      let intermediate = BigInt(oldBits);
       let needed = false;
+      const bNewBits = BigInt(newBits);
 
       for (let i = 0; i < topology.hinges.length; i++) {
         if (topology.hinges[i].removed) continue;
-        const oldPose = (oldBits >> (2 * i)) & 0x3;
-        const newPose = (newBits >> (2 * i)) & 0x3;
+        const oldPose = (intermediate >> BigInt(2 * i)) & 0x3n;
+        const newPose = (bNewBits >> BigInt(2 * i)) & 0x3n;
 
         // If flipping 0 <-> 2, inject 1 (Pose90) in between
-        if ((oldPose === 0 && newPose === 2) || (oldPose === 2 && newPose === 0)) {
-          const mask = 0x3 << (2 * i);
-          intermediate = (intermediate & ~mask) | (1 << (2 * i));
+        if ((oldPose === 0n && newPose === 2n) || (oldPose === 2n && newPose === 0n)) {
+          const mask = 0x3n << BigInt(2 * i);
+          intermediate = (intermediate & ~mask) | (1n << BigInt(2 * i));
           needed = true;
         }
       }
@@ -952,9 +962,9 @@
       
       // Use D3 to manage nodes and simulation
       // Map states to nodes, preserving positions if they already exist
-      const existingNodes = new Map(graphNodes.map(n => [n.id, n]));
+      const existingNodes = new Map(graphNodes.map(n => [BigInt(n.id), n]));
       graphNodes = decompressedStates.map(s => {
-        const old = existingNodes.get(s);
+        const old = existingNodes.get(BigInt(s));
         return {
           id: s,
           x: old ? old.x : width / 2 + (Math.random() - 0.5) * 50,
@@ -963,12 +973,14 @@
       });
 
       graphEdges = decompressedTransitions.map(t => {
-        const diff = t.from ^ t.to;
+        const bFrom = BigInt(t.from);
+        const bTo = BigInt(t.to);
+        const diff = bFrom ^ bTo;
         // Identify which hinge changed (e.g., hinge K)
         // Each hinge uses 2 bits.
         let hingeId = -1;
-        for (let i = 0; i < 16; i++) {
-          if ((diff >> (2 * i)) & 0x3) {
+        for (let i = 0; i < 32; i++) {
+          if ((diff >> BigInt(2 * i)) & 3n) {
             hingeId = i;
             break;
           }
@@ -1030,7 +1042,7 @@
           return graphNodes.find(n => {
             const dx = n.x - x;
             const dy = n.y - y;
-            const radius = n.id === currentPoseBits ? 12 : 9;
+            const radius = BigInt(n.id) === currentPoseBits ? 12 : 9;
             return Math.sqrt(dx * dx + dy * dy) < radius;
           });
         })
@@ -1074,8 +1086,8 @@
       
       // Draw edges
       graphEdges.forEach(e => {
-        const sourceId = e.source.id !== undefined ? e.source.id : e.source;
-        const targetId = e.target.id !== undefined ? e.target.id : e.target;
+        const sourceId = BigInt(e.source.id !== undefined ? e.source.id : e.source);
+        const targetId = BigInt(e.target.id !== undefined ? e.target.id : e.target);
         const isAdjacent = sourceId === currentPoseBits || targetId === currentPoseBits;
         
         // Edge color based on hingeId (stable colors)
@@ -1087,8 +1099,8 @@
         if (!isAdjacent) ctx.globalAlpha = 0.4;
         
         ctx.beginPath();
-        const src = e.source.id !== undefined ? e.source : graphNodes.find(n => n.id === e.source);
-        const tgt = e.target.id !== undefined ? e.target : graphNodes.find(n => n.id === e.target);
+        const src = e.source.id !== undefined ? e.source : graphNodes.find(n => BigInt(n.id) === BigInt(e.source));
+        const tgt = e.target.id !== undefined ? e.target : graphNodes.find(n => BigInt(n.id) === BigInt(e.target));
         if (src && tgt) {
           ctx.moveTo(src.x, src.y);
           ctx.lineTo(tgt.x, tgt.y);
@@ -1099,7 +1111,7 @@
       
       // Draw nodes
       graphNodes.forEach(n => {
-        const isActive = n.id === currentPoseBits;
+        const isActive = BigInt(n.id) === currentPoseBits;
         ctx.beginPath();
         ctx.arc(n.x, n.y, isActive ? 10 : 7, 0, Math.PI * 2);
         ctx.fillStyle = isActive ? accentColor : '#9ca3af';
@@ -1113,7 +1125,7 @@
           ctx.fillStyle = inkColor;
           ctx.font = isActive ? 'bold 11px Inter, system-ui, sans-serif' : '10px Inter, system-ui, sans-serif';
           ctx.textAlign = 'center';
-          const label = "0x" + Number(n.id).toString(16).toUpperCase();
+          const label = "0x" + BigInt(n.id).toString(16).toUpperCase();
           ctx.fillText(label, n.x, n.y + (isActive ? 22 : 20));
         }
       });
@@ -1153,7 +1165,7 @@
           const clickedNode = graphNodes.find(n => {
             const dx = n.x - upX;
             const dy = n.y - upY;
-            const radius = n.id === currentPoseBits ? 12 : 9;
+            const radius = BigInt(n.id) === currentPoseBits ? 12 : 9;
             return Math.sqrt(dx * dx + dy * dy) < radius;
           });
           
@@ -1167,12 +1179,12 @@
 
           // Check for edge click if an edge is adjacent to currentPoseBits
           const clickedEdge = graphEdges.find(edge => {
-            const sourceId = edge.source.id !== undefined ? edge.source.id : edge.source;
-            const targetId = edge.target.id !== undefined ? edge.target.id : edge.target;
+            const sourceId = BigInt(edge.source.id !== undefined ? edge.source.id : edge.source);
+            const targetId = BigInt(edge.target.id !== undefined ? edge.target.id : edge.target);
             if (sourceId !== currentPoseBits && targetId !== currentPoseBits) return false;
             
-            const src = edge.source.id !== undefined ? edge.source : graphNodes.find(n => n.id === edge.source);
-            const tgt = edge.target.id !== undefined ? edge.target : graphNodes.find(n => n.id === edge.target);
+            const src = edge.source.id !== undefined ? edge.source : graphNodes.find(n => BigInt(n.id) === BigInt(edge.source));
+            const tgt = edge.target.id !== undefined ? edge.target : graphNodes.find(n => BigInt(n.id) === BigInt(edge.target));
             if (!src || !tgt) return false;
 
             const distance = distToSegment({ x: upX, y: upY }, src, tgt);

@@ -25,6 +25,18 @@ func TestHTreeParametric(t *testing.T) {
 			t.Errorf("HTree(%d) got %d hinges, want %d", tt.levels, len(top.Hinges), tt.wantHinges)
 		}
 
+		// Verify State support for this many hinges
+		s := model.State{}
+		for i := 0; i < len(top.Hinges); i++ {
+			hID := model.HingeID(i)
+			// Try to set and get Pose180 for each hinge to test bit shifts
+			move := model.Move{Changes: []model.HingeChange{{Hinge: hID, To: model.Pose180}}}
+			s = s.ApplyMove(move)
+			if s.Pose(hID) != model.Pose180 {
+				t.Errorf("HTree(%d) hinge %d: failed to set/get Pose180", tt.levels, i)
+			}
+		}
+
 		// Verify cube IDs are sequential and match the count
 		for i := 0; i < len(top.Cubes); i++ {
 			found := false

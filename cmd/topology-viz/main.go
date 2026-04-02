@@ -45,9 +45,36 @@ type hingeJSON struct {
 
 type validateRequest struct {
 	Topology        topologyJSON `json:"topology"`
-	PoseBits        uint32       `json:"poseBits"`
+	PoseBits        stateBits    `json:"poseBits"`
 	PresetName      string       `json:"presetName,omitempty"`
 	MaxSimultaneous int          `json:"maxSimultaneous,omitempty"`
+}
+
+type stateBits uint64
+
+func (b stateBits) uint64() uint64 {
+	return uint64(b)
+}
+
+func (b *stateBits) UnmarshalJSON(data []byte) error {
+	if len(data) >= 2 && data[0] == '"' && data[len(data)-1] == '"' {
+		var s string
+		if err := json.Unmarshal(data, &s); err != nil {
+			return err
+		}
+		val, err := strconv.ParseUint(s, 10, 64)
+		if err != nil {
+			return err
+		}
+		*b = stateBits(val)
+		return nil
+	}
+	var val uint64
+	if err := json.Unmarshal(data, &val); err != nil {
+		return err
+	}
+	*b = stateBits(val)
+	return nil
 }
 
 type validateResponse struct {
@@ -55,7 +82,7 @@ type validateResponse struct {
 	Issues      []string `json:"issues"`
 	HingeCount  int      `json:"hingeCount"`
 	CubeCount   int      `json:"cubeCount"`
-	PoseBits    uint32   `json:"poseBits"`
+	PoseBits    uint64   `json:"poseBits"`
 	PoseBitsBin string   `json:"poseBitsBin"`
 	PresetUsed  string   `json:"presetUsed,omitempty"`
 }
@@ -80,7 +107,7 @@ type cubePoseJSON struct {
 }
 
 type posesResponse struct {
-	PoseBits uint32         `json:"poseBits"`
+	PoseBits uint64         `json:"poseBits"`
 	Poses    []cubePoseJSON `json:"poses"`
 	Error    string         `json:"error,omitempty"`
 }
@@ -170,26 +197,26 @@ func handleValidate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s := model.State{PoseBits: req.PoseBits}
+	s := model.State{PoseBits: uint64(req.PoseBits)}
 	report := validate.AnalyzeState(top, s)
 	resp := validateResponse{
 		Valid:       len(report.Issues) == 0,
 		Issues:      report.Issues,
 		HingeCount:  len(top.Hinges),
 		CubeCount:   len(top.Cubes),
-		PoseBits:    req.PoseBits,
+		PoseBits:    uint64(req.PoseBits),
 		PoseBitsBin: strconv.FormatUint(uint64(req.PoseBits), 2),
 	}
 	writeJSON(w, resp)
 }
 
 type transitionJSON struct {
-	From uint32 `json:"from"`
-	To   uint32 `json:"to"`
+	From uint64 `json:"from"`
+	To   uint64 `json:"to"`
 }
 
 type enumerateResponse struct {
-	States      []uint32         `json:"states"`
+	States      []uint64         `json:"states"`
 	Transitions []transitionJSON `json:"transitions"`
 }
 
@@ -220,8 +247,8 @@ func handleEnumerate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	start := time.Now()
-	startState := model.State{PoseBits: req.PoseBits}
-	validator := validate.StructuralValidator{}
+	startState := model.State{PoseBits: uint64(req.PoseBits)}
+	validator := &validate.StructuralValidator{}
 
 	maxSimultaneous := req.MaxSimultaneous
 	if maxSimultaneous < 1 {
@@ -231,7 +258,7 @@ func handleEnumerate(w http.ResponseWriter, r *http.Request) {
 	graph := fsm.Enumerate(top, startState, validator, maxSimultaneous)
 	log.Printf("Enumerate for %s (maxSimultaneous=%d) took %v (found %d states)", req.PresetName, maxSimultaneous, time.Since(start), len(graph.Nodes))
 
-	states := make([]uint32, 0, len(graph.Nodes))
+	states := make([]uint64, 0, len(graph.Nodes))
 	for s := range graph.Nodes {
 		states = append(states, s.PoseBits)
 	}
@@ -284,8 +311,8 @@ func handlePoses(w http.ResponseWriter, r *http.Request) {
 		writeJSONWithStatus(w, http.StatusBadRequest, apiError{Error: err.Error()})
 		return
 	}
-
-	state := model.State{PoseBits: req.PoseBits}
+	bits := uint64(req.PoseBits)
+	state := model.State{PoseBits: bits}
 	var collisionErr string
 	if report := validate.AnalyzeState(top, state); len(report.Issues) != 0 {
 		collisionErr = report.Issues[0]
@@ -299,7 +326,7 @@ func handlePoses(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := posesResponse{
-		PoseBits: req.PoseBits,
+		PoseBits: bits,
 		Poses:    make([]cubePoseJSON, 0, len(poses)),
 		Error:    collisionErr,
 	}

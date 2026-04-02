@@ -4,24 +4,32 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"sync"
 
 	"infinite-cube/internal/kinematics"
 	"infinite-cube/internal/model"
 )
 
 // StructuralValidator enforces basic topology/state consistency checks.
-type StructuralValidator struct{}
+type StructuralValidator struct {
+	cache sync.Map // map[uint64]bool
+}
 
-func (StructuralValidator) ValidTopology(top model.Topology) bool {
+func (v *StructuralValidator) ValidTopology(top model.Topology) bool {
 	return len(AnalyzeTopology(top).Issues) == 0
 }
 
-func (StructuralValidator) ValidState(top model.Topology, s model.State) bool {
-	return len(AnalyzeState(top, s).Issues) == 0
+func (v *StructuralValidator) ValidState(top model.Topology, s model.State) bool {
+	if val, ok := v.cache.Load(s.PoseBits); ok {
+		return val.(bool)
+	}
+	res := len(AnalyzeState(top, s).Issues) == 0
+	v.cache.Store(s.PoseBits, res)
+	return res
 }
 
-func (StructuralValidator) ValidTransition(top model.Topology, from model.State, mv model.Move, to model.State) bool {
-	if !(StructuralValidator{}).ValidState(top, from) || !(StructuralValidator{}).ValidState(top, to) {
+func (v *StructuralValidator) ValidTransition(top model.Topology, from model.State, mv model.Move, to model.State) bool {
+	if !v.ValidState(top, from) || !v.ValidState(top, to) {
 		return false
 	}
 	for _, c := range mv.Changes {
@@ -56,8 +64,8 @@ func AnalyzeTopology(top model.Topology) DiagnosticReport {
 	if len(top.Hinges) == 0 {
 		issues = append(issues, "topology has no hinges")
 	}
-	if len(top.Hinges) > 16 {
-		issues = append(issues, "topology has more than 16 hinges; State.PoseBits currently supports up to 16")
+	if len(top.Hinges) > 32 {
+		issues = append(issues, "topology has more than 32 hinges; State.PoseBits currently supports up to 32")
 	}
 
 	cubeSet := make(map[model.CubeID]struct{}, len(top.Cubes))
@@ -79,8 +87,8 @@ func AnalyzeTopology(top model.Topology) DiagnosticReport {
 			hingeIDs[h.ID] = struct{}{}
 			processedHinges[h.ID] = h
 		}
-		if h.ID >= 16 {
-			issues = append(issues, fmt.Sprintf("hinge ID %d exceeds PoseBits capacity (max 15)", h.ID))
+		if h.ID >= 32 {
+			issues = append(issues, fmt.Sprintf("hinge ID %d exceeds PoseBits capacity (max 31)", h.ID))
 		}
 		if _, ok := cubeSet[h.A]; !ok {
 			issues = append(issues, fmt.Sprintf("hinge %d references unknown cube A=%d", h.ID, h.A))
@@ -152,9 +160,9 @@ func AnalyzeState(top model.Topology, s model.State) DiagnosticReport {
 	issues := append([]string{}, report.Issues...)
 
 	if len(top.Hinges) > 0 {
-		var validMask uint32
+		var validMask uint64
 		for _, h := range top.Hinges {
-			if h.ID < 16 {
+			if h.ID < 32 {
 				validMask |= (0x3 << (2 * h.ID))
 			}
 		}
@@ -182,12 +190,19 @@ func AnalyzeState(top model.Topology, s model.State) DiagnosticReport {
 			}
 			sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
 
+			// Pre-calculate squared distance limit to avoid Sqrt
+			const distSqLimit = 0.99 * 0.99
+
 			for i := 0; i < len(ids); i++ {
+				pA := poses[ids[i]].P
 				for j := i + 1; j < len(ids); j++ {
-					idA, idB := ids[i], ids[j]
-					dist := poses[idA].P.Distance(poses[idB].P)
-					if dist < 0.99 {
-						issues = append(issues, fmt.Sprintf("collision detected between cube %d and cube %d (distance %.3f)", idA, idB, dist))
+					pB := poses[ids[j]].P
+					dx := pA.X - pB.X
+					dy := pA.Y - pB.Y
+					dz := pA.Z - pB.Z
+					distSq := dx*dx + dy*dy + dz*dz
+					if distSq < distSqLimit {
+						issues = append(issues, fmt.Sprintf("collision detected between cube %d and cube %d (distance %.3f)", ids[i], ids[j], math.Sqrt(distSq)))
 					}
 				}
 			}

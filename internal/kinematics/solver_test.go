@@ -90,7 +90,7 @@ func TestThreeCubeOpposed90HasLineLLinePattern(t *testing.T) {
 	solver := NewDeterministicSolver()
 	top := topology.ThreeCubeOpposed90()
 
-	classify := func(bits uint32) (bool, error) {
+	classify := func(bits uint64) (bool, error) {
 		poses, err := solver.Poses(top, model.State{PoseBits: bits})
 		if err != nil {
 			return false, err

@@ -1,6 +1,9 @@
 package fsm
 
 import (
+	"log"
+	"time"
+
 	"infinite-cube/internal/model"
 	"infinite-cube/internal/validate"
 )
@@ -15,12 +18,26 @@ func Enumerate(top model.Topology, start model.State, v validate.Validator, maxS
 
 	components := findComponents(top)
 
+	log.Printf("Starting Enumerate with %d hinges in %d components", len(top.Hinges), len(components))
+	for i, comp := range components {
+		log.Printf("  Component %d: %d hinges", i, len(comp))
+	}
+
 	queue := []model.State{start}
 	g.Nodes[start] = struct{}{}
+
+	statesVisited := 0
+	lastLog := time.Now()
 
 	for len(queue) > 0 {
 		cur := queue[0]
 		queue = queue[1:]
+		statesVisited++
+
+		if time.Since(lastLog) > 5*time.Second {
+			log.Printf("Enumerate progress: %d states visited, %d in queue", statesVisited, len(queue))
+			lastLog = time.Now()
+		}
 
 		for _, comp := range components {
 			// Explore all subsets of the component from size 1 up to maxSimultaneous

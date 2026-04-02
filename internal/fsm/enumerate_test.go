@@ -132,7 +132,7 @@ func TestEnumerateSimultaneousMoves(t *testing.T) {
 
 func TestEnumerateInvalidStart(t *testing.T) {
 	top := topology.TwoCubeHinge()
-	v := validate.StructuralValidator{}
+	v := &validate.StructuralValidator{}
 	// Invalid state: out of range bits
 	start := model.State{PoseBits: 0xFFFFFFFF}
 	g := Enumerate(top, start, v, 2)
@@ -147,7 +147,7 @@ func TestTwoCubeHingeThroughReachability(t *testing.T) {
 	// Therefore, Pose180 should be unreachable from Pose0.
 	top := topology.TwoCubeHingeThrough()
 	start := model.State{} // Pose0 for all hinges
-	v := validate.StructuralValidator{}
+	v := &validate.StructuralValidator{}
 
 	g := Enumerate(top, start, v, 2)
 
