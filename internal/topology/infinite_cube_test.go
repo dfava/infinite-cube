@@ -19,7 +19,7 @@ func TestInfiniteCube(t *testing.T) {
 	}
 	require.Equal(t, 0, len(report.Issues), "Expected no issues, but found %d", len(report.Issues))
 
-	graph := fsm.Enumerate(cube, model.State{}, validate.StructuralValidator{})
+	graph := fsm.Enumerate(cube, model.State{}, validate.StructuralValidator{}, 2)
 	require.Equal(t, 24, graph.NumNodes())
 	require.Equal(t, 64, graph.NumEdges())
 }

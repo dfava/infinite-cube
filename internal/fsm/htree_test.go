@@ -13,7 +13,7 @@ func TestHTreeTransitions(t *testing.T) {
 	start := model.State{}
 	v := validate.PermissiveValidator{}
 
-	g := Enumerate(top, start, v)
+	g := Enumerate(top, start, v, 2)
 
 	// Check if any transition from start involves both hinge 1 and 4.
 	found14 := false

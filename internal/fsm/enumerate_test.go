@@ -12,7 +12,7 @@ func TestIntuition(t *testing.T) {
 	top := topology.TwoCubeHinge()
 	start := model.State{}
 	validator := validate.PermissiveValidator{}
-	g := Enumerate(top, start, validator)
+	g := Enumerate(top, start, validator, 2)
 	if len(g.Nodes) == 0 {
 		t.Fatalf("expected at least one reachable node")
 	}
@@ -23,7 +23,7 @@ func TestEnumerateHypercubeCountWithPermissiveValidator(t *testing.T) {
 	start := model.State{}
 	v := validate.PermissiveValidator{}
 
-	g := Enumerate(top, start, v)
+	g := Enumerate(top, start, v, 2)
 
 	// wantNodes := wantNodes * len(top.Hinges)
 	// Each hinge can be in 3 poses: 0, 90, 180.
@@ -70,19 +70,17 @@ func TestEnumerateHypercubeCountWithPermissiveValidator(t *testing.T) {
 	// (180,180)->(90,90) [1 edge]
 	// Total edges for one pair across all 9 states = 1+2+1+2+4+2+1+2+1 = 16
 
-	// Total simultaneous edges for N hinges = (N choose 2) * 16 * 3^(N-2)
-	wantPairEdges := (n * (n - 1) / 2) * 16
-	for i := 0; i < n-2; i++ {
-		wantPairEdges *= 3
-	}
-
-	wantEdges := wantSingleEdges + wantPairEdges
+	// With the new heuristic, independent simultaneous moves are only recorded if no
+	// proper subset is valid. With PermissiveValidator, all single-hinge moves are valid.
+	// Therefore, NO simultaneous moves will be recorded by Enumerate because they are
+	// all considered "compound moves".
+	wantEdges := wantSingleEdges
 	gotEdges := 0
 	for _, out := range g.Edges {
 		gotEdges += len(out)
 	}
 	if gotEdges != wantEdges {
-		t.Fatalf("expected %d edges, got %d", wantEdges, gotEdges)
+		t.Fatalf("expected %d edges (single-hinge moves only), got %d", wantEdges, gotEdges)
 	}
 }
 
@@ -114,7 +112,7 @@ func TestEnumerateSimultaneousMoves(t *testing.T) {
 	start := model.State{}
 	v := BlockedValidator{}
 
-	g := Enumerate(top, start, v)
+	g := Enumerate(top, start, v, 2)
 
 	// In this test, single moves from Pose0,0 lead to Pose180,0 or Pose0,180.
 	// Both are invalid according to BlockedValidator.
@@ -137,7 +135,7 @@ func TestEnumerateInvalidStart(t *testing.T) {
 	v := validate.StructuralValidator{}
 	// Invalid state: out of range bits
 	start := model.State{PoseBits: 0xFFFFFFFF}
-	g := Enumerate(top, start, v)
+	g := Enumerate(top, start, v, 2)
 	if len(g.Nodes) != 0 {
 		t.Fatalf("expected 0 nodes for invalid start state")
 	}
@@ -151,7 +149,7 @@ func TestTwoCubeHingeThroughReachability(t *testing.T) {
 	start := model.State{} // Pose0 for all hinges
 	v := validate.StructuralValidator{}
 
-	g := Enumerate(top, start, v)
+	g := Enumerate(top, start, v, 2)
 
 	// Only the initial Pose0 state should be reachable.
 	if len(g.Nodes) != 1 {

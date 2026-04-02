@@ -14,7 +14,7 @@ func main() {
 	start := model.State{}
 	validator := validate.PermissiveValidator{}
 
-	graph := fsm.Enumerate(top, start, validator)
+	graph := fsm.Enumerate(top, start, validator, 2)
 
 	edges := 0
 	for _, out := range graph.Edges {

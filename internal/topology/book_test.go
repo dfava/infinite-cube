@@ -33,7 +33,7 @@ func TestBook(t *testing.T) {
 	isValidTransition := validate.StructuralValidator{}.ValidTransition(book, model.State{}, move, to)
 	require.True(t, isValidTransition)
 
-	graph := fsm.Enumerate(book, model.State{}, validate.StructuralValidator{})
+	graph := fsm.Enumerate(book, model.State{}, validate.StructuralValidator{}, 3)
 	transitions := graph.Edges[model.State{}]
 	expected := []model.Transition{
 		{

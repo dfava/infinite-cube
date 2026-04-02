@@ -25,8 +25,9 @@ var (
 )
 
 type topologyJSON struct {
-	Cubes  []int       `json:"cubes"`
-	Hinges []hingeJSON `json:"hinges"`
+	Cubes           []int       `json:"cubes"`
+	Hinges          []hingeJSON `json:"hinges"`
+	MaxSimultaneous int         `json:"maxSimultaneous,omitempty"`
 }
 
 type hingeJSON struct {
@@ -43,9 +44,10 @@ type hingeJSON struct {
 }
 
 type validateRequest struct {
-	Topology   topologyJSON `json:"topology"`
-	PoseBits   uint32       `json:"poseBits"`
-	PresetName string       `json:"presetName,omitempty"`
+	Topology        topologyJSON `json:"topology"`
+	PoseBits        uint32       `json:"poseBits"`
+	PresetName      string       `json:"presetName,omitempty"`
+	MaxSimultaneous int          `json:"maxSimultaneous,omitempty"`
 }
 
 type validateResponse struct {
@@ -109,6 +111,7 @@ func handleTopology(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var top model.Topology
+	maxSim := 2
 	switch preset {
 	case "two-cube-hinge":
 		top = topology.TwoCubeHinge()
@@ -134,12 +137,15 @@ func handleTopology(w http.ResponseWriter, r *http.Request) {
 		top = topology.HTree()
 	case "book-3":
 		top = topology.Book(3)
+		maxSim = 3
 	default:
 		http.Error(w, "unknown preset", http.StatusBadRequest)
 		return
 	}
 
-	writeJSON(w, toTopologyJSON(top))
+	tj := toTopologyJSON(top)
+	tj.MaxSimultaneous = maxSim
+	writeJSON(w, tj)
 }
 
 func handleValidate(w http.ResponseWriter, r *http.Request) {
@@ -196,7 +202,8 @@ func handleEnumerate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.PresetName != "" {
-		if val, ok := enumerateCache.Load(req.PresetName); ok {
+		cacheKey := fmt.Sprintf("%s-%d-%d", req.PresetName, req.MaxSimultaneous, req.PoseBits)
+		if val, ok := enumerateCache.Load(cacheKey); ok {
 			writeJSON(w, val)
 			return
 		}
@@ -212,8 +219,13 @@ func handleEnumerate(w http.ResponseWriter, r *http.Request) {
 	startState := model.State{PoseBits: req.PoseBits}
 	validator := validate.StructuralValidator{}
 
-	graph := fsm.Enumerate(top, startState, validator)
-	log.Printf("Enumerate for %s took %v (found %d states)", req.PresetName, time.Since(start), len(graph.Nodes))
+	maxSimultaneous := req.MaxSimultaneous
+	if maxSimultaneous < 1 {
+		maxSimultaneous = 2 // default to 2
+	}
+
+	graph := fsm.Enumerate(top, startState, validator, maxSimultaneous)
+	log.Printf("Enumerate for %s (maxSimultaneous=%d) took %v (found %d states)", req.PresetName, maxSimultaneous, time.Since(start), len(graph.Nodes))
 
 	states := make([]uint32, 0, len(graph.Nodes))
 	for s := range graph.Nodes {
@@ -244,7 +256,8 @@ func handleEnumerate(w http.ResponseWriter, r *http.Request) {
 
 	resp := enumerateResponse{States: states, Transitions: transitions}
 	if req.PresetName != "" {
-		enumerateCache.Store(req.PresetName, resp)
+		cacheKey := fmt.Sprintf("%s-%d-%d", req.PresetName, req.MaxSimultaneous, req.PoseBits)
+		enumerateCache.Store(cacheKey, resp)
 	}
 
 	writeJSON(w, resp)
