@@ -21,15 +21,14 @@
             <option value="three-opposed-90">three-opposed-90</option>
             <option value="three-cube-z">three-cube-z</option>
             <option value="infinite-cube-8">infinite-cube-8</option>
-            <option value="snake-chain-4">snake-chain-4</option>
+            <option value="snake">snake</option>
             <option value="ring-loop-6">ring-loop-6</option>
             <option value="grid-2x2">grid-2x2</option>
-            <option value="h-tree-1">h-tree-1</option>
-            <option value="h-tree-2">h-tree-2</option>
-            <option value="h-tree-3">h-tree-3</option>
-            <option value="book-3">book-3</option>
+            <option value="h-tree">h-tree</option>
+            <option value="book">book</option>
           </select>
         </label>
+        <div id="topologyParams" style="display: inline-block; margin-left: 10px;"></div>
         <button id="resetPose" class="secondary">Reset to Initial Pose</button>
         <button id="randomWalkBtn" class="secondary">Start Random Walk</button>
       </div>
@@ -265,8 +264,33 @@
 
     window.loadPreset = function() {
       const preset = document.getElementById('preset').value;
+      const paramsDiv = document.getElementById('topologyParams');
+      
+      const parametricPresets = {
+        'h-tree': { label: 'Levels', default: 2 },
+        'book': { label: 'Pages', default: 3 },
+        'snake': { label: 'Cubes', default: 4 }
+      };
+
+      let paramValue = '';
+      if (parametricPresets[preset]) {
+        // If the parameter UI is not already present for this preset, create it.
+        // We check if it's the right label to avoid recreating it if the user just changed the value.
+        const currentLabel = paramsDiv.querySelector('label')?.textContent || '';
+        if (!currentLabel.startsWith(parametricPresets[preset].label)) {
+          paramsDiv.innerHTML = `
+            <label>${parametricPresets[preset].label}: 
+              <input type="number" id="topoParam" value="${parametricPresets[preset].default}" min="1" max="10" style="width: 40px;">
+            </label>`;
+          paramsDiv.querySelector('input').addEventListener('change', window.loadPreset);
+        }
+        paramValue = document.getElementById('topoParam').value;
+      } else {
+        paramsDiv.innerHTML = '';
+      }
+
       currentPresetName = preset;
-      fetch(`/api/topology?preset=${encodeURIComponent(preset)}`)
+      fetch(`/api/topology?preset=${encodeURIComponent(preset)}&param=${paramValue}`)
         .then(r => r.json())
         .then(data => {
           topology = data;
@@ -690,6 +714,7 @@
       const activeTop = getActiveTopology();
       const compressedBits = compressPoseBits(poseBits);
       const maxSim = parseInt(document.getElementById('maxSimultaneous').value) || 2;
+      const param = parseInt(document.getElementById('topoParam')?.value) || 0;
       fetch('/api/enumerate', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
@@ -697,7 +722,8 @@
           topology: activeTop,
           poseBits: compressedBits,
           presetName: currentPresetName,
-          maxSimultaneous: maxSim
+          maxSimultaneous: maxSim,
+          param: param
         }),
       })
       .then(r => r.json())

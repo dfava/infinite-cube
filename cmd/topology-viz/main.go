@@ -48,6 +48,7 @@ type validateRequest struct {
 	PoseBits        stateBits    `json:"poseBits"`
 	PresetName      string       `json:"presetName,omitempty"`
 	MaxSimultaneous int          `json:"maxSimultaneous,omitempty"`
+	Param           int          `json:"param,omitempty"`
 }
 
 type stateBits uint64
@@ -137,6 +138,9 @@ func handleTopology(w http.ResponseWriter, r *http.Request) {
 		preset = "two-cube-hinge"
 	}
 
+	paramStr := r.URL.Query().Get("param")
+	param, _ := strconv.Atoi(paramStr)
+
 	var top model.Topology
 	maxSim := 2
 	switch preset {
@@ -154,20 +158,25 @@ func handleTopology(w http.ResponseWriter, r *http.Request) {
 		top = topology.ThreeCubeZ()
 	case "infinite-cube-8":
 		top = topology.InfiniteCube8()
-	case "snake-chain-4":
-		top = topology.SnakeChain(4)
+	case "snake":
+		if param == 0 {
+			param = 4
+		}
+		top = topology.SnakeChain(param)
 	case "ring-loop-6":
 		top = topology.RingLoop6()
 	case "grid-2x2":
 		top = topology.Grid2x2()
-	case "h-tree-1":
-		top = topology.HTree(1)
-	case "h-tree-2":
-		top = topology.HTree(2)
-	case "h-tree-3":
-		top = topology.HTree(3)
-	case "book-3":
-		top = topology.Book(3)
+	case "h-tree":
+		if param == 0 {
+			param = 2
+		}
+		top = topology.HTree(param)
+	case "book":
+		if param == 0 {
+			param = 3
+		}
+		top = topology.Book(param)
 		maxSim = 3
 	default:
 		http.Error(w, "unknown preset", http.StatusBadRequest)
@@ -233,7 +242,7 @@ func handleEnumerate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.PresetName != "" {
-		cacheKey := fmt.Sprintf("%s-%d-%d", req.PresetName, req.MaxSimultaneous, req.PoseBits)
+		cacheKey := fmt.Sprintf("%s-%d-%d-%d", req.PresetName, req.Param, req.MaxSimultaneous, req.PoseBits)
 		if val, ok := enumerateCache.Load(cacheKey); ok {
 			writeJSON(w, val)
 			return
@@ -287,7 +296,7 @@ func handleEnumerate(w http.ResponseWriter, r *http.Request) {
 
 	resp := enumerateResponse{States: states, Transitions: transitions}
 	if req.PresetName != "" {
-		cacheKey := fmt.Sprintf("%s-%d-%d", req.PresetName, req.MaxSimultaneous, req.PoseBits)
+		cacheKey := fmt.Sprintf("%s-%d-%d-%d", req.PresetName, req.Param, req.MaxSimultaneous, req.PoseBits)
 		enumerateCache.Store(cacheKey, resp)
 	}
 
